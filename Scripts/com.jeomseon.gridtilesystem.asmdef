@@ -1,0 +1,22 @@
+{
+    "name": "com.jeomseon.gridtilesystem",
+    "rootNamespace": "",
+    "references": [
+        "GUID:36b2a6f7c90d49e468cdcf35ea92b22a",
+        "GUID:d525ad6bd40672747bde77962f1c401e",
+        "GUID:43090dc920f069a44abada7b4b0ed5b5",
+        "GUID:30caffa1b8021934f9389778034cca26",
+        "GUID:15fc0a57446b3144c949da3e2b9737a9",
+        "GUID:df1bf7910f741454da03459ecdb5adb5",
+        "GUID:0ab9a023f59351a40afaca6a33575d40"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

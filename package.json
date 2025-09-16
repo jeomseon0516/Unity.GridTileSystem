@@ -1,0 +1,8 @@
+{
+  "name": "com.jeomseon.gridtilesystem",
+  "version": "1.0.0",
+  "displayName": "Jeomseon GridTileSystem",
+  "dependencies": {
+    "com.unity.render-pipilines.universal": "14.0.11"
+  }
+}
