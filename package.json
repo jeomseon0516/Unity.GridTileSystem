@@ -1,8 +1,14 @@
 {
   "name": "com.jeomseon.gridtilesystem",
   "version": "1.0.0",
-  "displayName": "Jeomseon GridTileSystem",
+  "description": "Jeomseon GridTileSystem",
+  "unity": "2022.3",
   "dependencies": {
-    "com.unity.render-pipilines.universal": "14.0.11"
+    "com.unity.render-pipelines.universal": "14.0.11",
+    "com.jeomseon.unityscripts": "https://github.com/jeomseon0516/JeomseonScriptPack.git#master"
+  },
+  "author": {
+    "name": "jeomseon0516",
+    "url": "https://github.com/jeomseon0516"
   }
 }
