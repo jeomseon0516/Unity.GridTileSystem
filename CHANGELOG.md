@@ -2,6 +2,18 @@
 
 이 문서는 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따릅니다.
 
+## [0.1.1] - 2026-07-29
+
+- Runtime·Editor·Tests·Samples 어셈블리의 `rootNamespace`와 소스 파일 위치를 namespace에 맞게 정리했습니다.
+
+## [Unreleased]
+
+### 변경
+
+- Runtime, Editor, Tests, Samples 어셈블리의 `rootNamespace`를 실제 공개 namespace와 일치시켰습니다.
+- `Hex` 중간 폴더를 제거하여 파일 위치와 `Jeomseon.HexGrid` namespace가 일치하도록 정리했습니다.
+- 샘플 코드를 독립적인 Sample asmdef로 분리했습니다.
+
 ## [0.1.0] - 2026-07-29
 
 ### 추가
