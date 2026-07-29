@@ -1,0 +1,21 @@
+{
+  "name": "Jeomseon.Unity.GridTileSystem.Tests",
+  "rootNamespace": "Jeomseon",
+  "references": [
+    "Jeomseon.Unity.GridTileSystem"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

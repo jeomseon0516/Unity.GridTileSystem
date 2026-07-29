@@ -1,0 +1,19 @@
+{
+  "name": "Jeomseon.Unity.GridTileSystem",
+  "rootNamespace": "Jeomseon",
+  "references": [
+    "Jeomseon.Unity.Attributes",
+    "Jeomseon.Unity.Core",
+    "Unity.InputSystem",
+    "Unity.RenderPipelines.Universal.Runtime"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

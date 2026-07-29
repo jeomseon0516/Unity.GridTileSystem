@@ -1,14 +1,36 @@
 {
-  "name": "com.jeomseon.gridtilesystem",
-  "version": "1.0.0",
-  "description": "Jeomseon GridTileSystem",
+  "name": "com.jeomseon.unity.grid-tile-system",
+  "version": "0.1.0",
+  "displayName": "Jeomseon Unity Grid Tile System",
+  "description": "육각형 그리드 좌표, 타일 상호작용 및 URP 데칼 기반 시각화를 제공하는 Unity 패키지입니다.",
   "unity": "2022.3",
+  "license": "MIT",
   "dependencies": {
-    "com.unity.render-pipelines.universal": "14.0.11",
-    "com.jeomseon.unityscripts": "https://github.com/jeomseon0516/JeomseonScriptPack.git#master"
+    "com.jeomseon.unity.attributes": "0.2.1",
+    "com.jeomseon.unity.core": "0.1.2",
+    "com.jeomseon.unity.editor-toolkit": "0.3.1",
+    "com.unity.inputsystem": "1.7.0",
+    "com.unity.render-pipelines.universal": "14.0.11"
   },
+  "keywords": [
+    "grid",
+    "tile",
+    "hex",
+    "urp"
+  ],
   "author": {
     "name": "jeomseon0516",
     "url": "https://github.com/jeomseon0516"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jeomseon0516/Unity.GridTileSystem.git"
+  },
+  "samples": [
+    {
+      "displayName": "기본 사용 예제",
+      "description": "육각 좌표와 타일 데이터 API를 확인하는 간단한 예제입니다.",
+      "path": "Samples~/BasicUsage"
+    }
+  ]
 }

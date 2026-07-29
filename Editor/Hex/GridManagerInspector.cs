@@ -4,7 +4,6 @@ using System.Reflection;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
-using AYellowpaper.SerializedCollections;
 using Jeomseon.Editor.GUI;
 using Jeomseon.Extensions;
 
@@ -16,6 +15,9 @@ namespace Jeomseon.HexGrid.Editor
     [CustomEditor(typeof(GridManager))]
     internal sealed class GridManagerInspector : Editor
     {
+        // TODO(리팩토링): private 필드 리플렉션 접근을 제거하고 GridManager가 제공하는
+        // 에디터 전용 읽기 API 또는 SerializedProperty 기반 구현으로 변경합니다.
+        // TODO(확장): 다량의 타일 라벨은 가시 범위와 확대 수준에 따라 선별해 Scene View 부하를 줄입니다.
         public readonly struct HexGUIData
         {
             public Vector3 TilePosition { get; }
@@ -28,7 +30,7 @@ namespace Jeomseon.HexGrid.Editor
             }
         }
 
-        private SerializedDictionary<AxialCoordinates, HexGrid> _hexGrids = null;
+        private List<HexGrid> _hexGrids = null;
         private readonly List<HexGUIData> _hexGridDescriptions = new();
 
         private GridManager _gridManager = null;
@@ -41,7 +43,7 @@ namespace Jeomseon.HexGrid.Editor
         private void OnEnable()
         {
             _gridManager = (target as GridManager)!;
-            initializeTile();
+            InitializeTile();
             _hexOptionWindow.OnEnable();
         }
 
@@ -51,20 +53,20 @@ namespace Jeomseon.HexGrid.Editor
             _currentHexProperty = null;
         }
 
-        private void initializeTile()
+        private void InitializeTile()
         {
             _tileCount = _gridManager.TileCount;
             _hexGrids = (_gridManager
                 .GetType()
                 .GetField("_hexGrids", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .GetValue(_gridManager) as SerializedDictionary<AxialCoordinates, HexGrid>)!;
+                .GetValue(_gridManager) as List<HexGrid>)!;
 
             _hexGridDescriptions.Clear();
             _hexGridDescriptions.Capacity = _hexGrids.Count;
             _hexGridDescriptions.AddRange(_hexGrids
-                .Select(kvp => new HexGUIData(
-                    kvp.Value.TilePosition,
-                    $"Q : {kvp.Value.HexPoint.Q} R : {kvp.Value.HexPoint.R} S : {kvp.Value.HexPoint.S} \n [{string.Join(", \n   ", kvp.Value.Properties)}]")));
+                .Select(hex => new HexGUIData(
+                    hex.TilePosition,
+                    $"Q : {hex.HexPoint.Q} R : {hex.HexPoint.R} S : {hex.HexPoint.S} \n [{string.Join(", \n   ", hex.Properties)}]")));
         }
 
         public override void OnInspectorGUI()
@@ -76,7 +78,7 @@ namespace Jeomseon.HexGrid.Editor
             if (GUILayout.Button("Calculate Grids"))
             {
                 _gridManager.CalculateTile();
-                initializeTile();
+                InitializeTile();
                 EditorUtility.SetDirty(_gridManager);
                 serializedObject.ApplyModifiedProperties();
             }
@@ -90,7 +92,7 @@ namespace Jeomseon.HexGrid.Editor
             if (GUILayout.Button("Clear Tiles"))
             {
                 _hexGrids.Clear();
-                initializeTile();
+                InitializeTile();
                 EditorUtility.SetDirty(_gridManager);
                 serializedObject.ApplyModifiedProperties();
             }
@@ -114,7 +116,7 @@ namespace Jeomseon.HexGrid.Editor
                     children.ForEach(DestroyImmediate);
                     
                     _hexGrids
-                        .Select(grid => new GameObject($"Index_{grid.Value.Index}"))
+                        .Select(grid => new GameObject($"Index_{grid.Index}"))
                         .ForEach(player => player.SetParent(_gridManager.RootObject, false));
                 }
             }
@@ -154,13 +156,11 @@ namespace Jeomseon.HexGrid.Editor
                 currentEvent.button == 0 && 
                 _gridManager.TryGetTileDataByRay(HandleUtility.GUIPointToWorldRay(currentEvent.mousePosition), out (bool, RaycastHit) _, out IHexGrid hexGrid))
             {
-                int index = _hexGrids.Values.ToList().IndexOf((HexGrid)hexGrid);
+                int index = _hexGrids.IndexOf((HexGrid)hexGrid);
 
                 _currentHexProperty = serializedObject
                     .FindProperty("_hexGrids")
-                    .FindPropertyRelative("_serializedList")
-                    .GetArrayElementAtIndex(index)
-                    .FindPropertyRelative("Value");
+                    .GetArrayElementAtIndex(index);
 
                 _currentHexProperty.isExpanded = true;
                 currentEvent.Use();

@@ -1,0 +1,20 @@
+{
+  "name": "Jeomseon.Unity.GridTileSystem.Editor",
+  "rootNamespace": "Jeomseon",
+  "references": [
+    "Jeomseon.Unity.GridTileSystem",
+    "Jeomseon.Unity.Core",
+    "Jeomseon.Unity.EditorToolkit.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

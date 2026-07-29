@@ -19,6 +19,8 @@ namespace Jeomseon.HexGrid
     [System.Serializable]
     public class HexGrid : IHexGrid
     {
+        // TODO(리팩토링): UnityEvent를 포함한 상호작용 상태와 순수 타일 데이터를 분리하여
+        // 런타임 저장, 네트워크 동기화 및 단위 테스트에 사용할 수 있게 합니다.
         [field: SerializeField, ReadOnly] public Vector3 TilePosition { get; private set; } = Vector3.zero;
         [field: SerializeField, ReadOnly] public Vector2 NormalizedPosition { get; private set; } = Vector2.zero;
         [field: SerializeField, ReadOnly] public int Index { get; private set; } = 0;
@@ -175,7 +177,7 @@ namespace Jeomseon.HexGrid
             int rMin = Mathf.Max(-limit, -q - limit);
             int index = (2 * limit + 1) * (q + limit);
 
-            // .. TODO : 보류
+            // TODO(검증): 좌표별 인덱스가 연속적이고 중복되지 않는지 경계값 단위 테스트를 보강합니다.
             for (int i = -limit; i < q; i++)
             {
                 index -= Mathf.Abs(i);
@@ -187,12 +189,12 @@ namespace Jeomseon.HexGrid
         }
 
         #if UNITY_EDITOR
-        private void onChangedActive()
+        private void HandleActiveChangedInEditor()
         {
             _onChangedActive.Invoke(this, _isActive);
         }
 
-        private void onChangedColor()
+        private void HandleColorChangedInEditor()
         {
             _onChangedColor.Invoke(this, _color);
         }
