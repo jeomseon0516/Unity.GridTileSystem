@@ -7,17 +7,12 @@ using UnityEngine.InputSystem;
 using UnityEngine.Serialization;
 using UnityEngine.Rendering.Universal;
 using Jeomseon.Attribute;
-using Jeomseon.Extensions;
-using Jeomseon.Helper;
+using Jeomseon.Collections;
 
 namespace Jeomseon.HexGrid
 {
     public sealed class GridManager : MonoBehaviour, ISerializationCallbackReceiver
     {
-        // TODO(리팩토링): 입력 처리, 물리 레이캐스트, 타일 데이터, GPU 버퍼 갱신 책임을
-        // 각각의 서비스로 분리하고 인터페이스로 주입하여 테스트 가능한 구조로 변경합니다.
-        // TODO(확장): URP DecalProjector 전용 구현을 렌더링 백엔드로 추상화하여
-        // 메시, Shader Graph, 다른 렌더 파이프라인 구현을 선택할 수 있게 합니다.
         private const float HEXAGON_RADIUS_MIN = 0.025f;
         private const float HEXAGON_RADIUS_MAX = 0.5f;
 
@@ -62,12 +57,13 @@ namespace Jeomseon.HexGrid
         [SerializeField] private UnityEvent<IHexGrid> _onMouseUpTile = new();
         [SerializeField] private UnityEvent<IHexGrid> _onMouseDownTile = new();
 
-        // TODO(확장): 현재는 패키지 외부 의존성을 줄이기 위해 List를 직렬화합니다.
-        // 자체 SerializedDictionary가 별도 패키지로 안정화되면 좌표 기반 직렬화 컬렉션으로 교체를 검토합니다.
+        /* TODO(P3-02, extensibility): 현재는 패키지 외부 의존성을 줄이기 위해 List를 직렬화합니다.
+         * 자체 SerializedDictionary가 별도 패키지로 안정화되면 좌표 기반 직렬화 컬렉션으로 교체를 검토합니다.
+         */
         [SerializeField] private List<HexGrid> _hexGrids = new();
         private readonly Dictionary<AxialCoordinates, HexGrid> _hexGridLookup = new();
 
-        [SerializeField, InitializeRequireComponent] private DecalProjector _decalProjector;
+        [SerializeField, GetOrAddComponent] private DecalProjector _decalProjector;
 
         [FormerlySerializedAs("_qLimit")]
         [SerializeField, Min(0)] private int _tileLimit = 3;
@@ -94,7 +90,9 @@ namespace Jeomseon.HexGrid
             get
             {
                 int limitDouble = _tileLimit * 2;
-                return (JeomseonMath.GetArithmeticSeriesSum(limitDouble) - JeomseonMath.GetArithmeticSeriesSum(_tileLimit)) * 2 + limitDouble + 1;
+                int outerSum = limitDouble * (limitDouble + 1) / 2;
+                int innerSum = _tileLimit * (_tileLimit + 1) / 2;
+                return (outerSum - innerSum) * 2 + limitDouble + 1;
             }
         }
 
@@ -110,6 +108,9 @@ namespace Jeomseon.HexGrid
 
         [field: SerializeField] public LayerMask LayerMask { get; set; }
 
+        /* TODO(P1-01, architecture): 입력 처리, 물리 레이캐스트, 타일 데이터, GPU 버퍼 갱신 책임을
+         * 각각의 서비스로 분리하고 인터페이스로 주입하여 테스트 가능한 구조로 변경합니다.
+         */
         private void Awake()
         {
             RebuildLookup();
@@ -232,7 +233,7 @@ namespace Jeomseon.HexGrid
                     hitTuple.Item2.point.x - _decalProjector.transform.position.x, 
                     hitTuple.Item2.point.z - _decalProjector.transform.position.z);
                 
-                convertedPosition /= _decalProjector.size.x * _decalProjector.GetLocalScaleX();
+                convertedPosition /= _decalProjector.size.x * _decalProjector.transform.localScale.x;
 
                 Vector2 axialCoordinates = new(
                     TWO_F_DIVIDE_THREE * convertedPosition.x / HexagonRadius,
@@ -293,9 +294,10 @@ namespace Jeomseon.HexGrid
 
         public void CalculateTile()
         {
-            // TODO(성능): 큰 그리드에서는 전체 재계산 대신 변경 영역만 갱신하고,
-            // 좌표 계산을 Burst/Jobs로 옮길 수 있도록 순수 계산 계층을 분리합니다.
-            Vector3 projectorSize = _decalProjector.size * _decalProjector.GetLocalScaleX();
+            /* TODO(P2-01, performance): 큰 그리드에서는 전체 재계산 대신 변경 영역만 갱신하고,
+             * 좌표 계산을 Burst/Jobs로 옮길 수 있도록 순수 계산 계층을 분리합니다.
+             */
+            Vector3 projectorSize = _decalProjector.size * _decalProjector.transform.localScale.x;
 
             for (int q = -_tileLimit; q <= _tileLimit; q++)
             {
@@ -373,10 +375,14 @@ namespace Jeomseon.HexGrid
             SendToShaderHexOption();
         }
 
+        /* TODO(P3-01, extensibility): URP DecalProjector 전용 구현을 렌더링 백엔드로 추상화하여
+         * 메시, Shader Graph, 다른 렌더 파이프라인 구현을 선택할 수 있게 합니다.
+         */
         public void SendToShaderHexOption()
         {
-            // TODO(성능): 값 하나가 변경될 때마다 전체 ComputeBuffer를 재생성하지 않고
-            // dirty index만 갱신하며 GraphicsBuffer 사용 가능 여부도 검토합니다.
+            /* TODO(P2-02, performance): 값 하나가 변경될 때마다 전체 ComputeBuffer를 재생성하지 않고
+             * dirty index만 갱신하며 GraphicsBuffer 사용 가능 여부도 검토합니다.
+             */
             HexOption[] hexOptions = _hexGrids
                 .Select(hex => hex.GetShaderOption())
                 .ToArray();
@@ -421,13 +427,13 @@ namespace Jeomseon.HexGrid
         }
 
         #if UNITY_EDITOR
-        [OnChangedValueForMethod(nameof(_tileLimit))]
+        [InvokeOnInspectorChange(nameof(_tileLimit))]
         private void OnChangedLimit()
         {
             _decalProjector.material.SetFloat(_absoluteLimit, _tileLimit);
         }
 
-        [OnChangedValueForMethod(nameof(HexagonRadius))]
+        [InvokeOnInspectorChange(nameof(HexagonRadius))]
         private void OnChangedRadius()
         {
             _decalProjector.material.SetFloat(_radius, HexagonRadius);

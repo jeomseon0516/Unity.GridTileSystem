@@ -5,7 +5,8 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Serialization;
 using Jeomseon.Attribute;
-using Jeomseon.Extensions;
+using Jeomseon.Events;
+using Jeomseon.Mathematics;
 
 namespace Jeomseon.HexGrid
 {
@@ -19,8 +20,6 @@ namespace Jeomseon.HexGrid
     [System.Serializable]
     public class HexGrid : IHexGrid
     {
-        // TODO(리팩토링): UnityEvent를 포함한 상호작용 상태와 순수 타일 데이터를 분리하여
-        // 런타임 저장, 네트워크 동기화 및 단위 테스트에 사용할 수 있게 합니다.
         [field: SerializeField, ReadOnly] public Vector3 TilePosition { get; private set; } = Vector3.zero;
         [field: SerializeField, ReadOnly] public Vector2 NormalizedPosition { get; private set; } = Vector2.zero;
         [field: SerializeField, ReadOnly] public int Index { get; private set; } = 0;
@@ -108,7 +107,7 @@ namespace Jeomseon.HexGrid
 
         public bool RemoveProperty(string property)
         {
-            return _properties.RemoveByConditionAll(p => property == p);
+            return _properties.RemoveAll(p => property == p) > 0;
         }
 
         public void InvokeOnEnterTile()
@@ -133,7 +132,7 @@ namespace Jeomseon.HexGrid
 
         public HexOption GetShaderOption() => new()
         {
-            Color = _color.ToVec3(),
+            Color = _color.ToRgbVector(),
             IsActive = _isActive ? 1 : 0
         };
 
@@ -162,6 +161,9 @@ namespace Jeomseon.HexGrid
             _hexPoint = axialCoordinates;
         }
 
+        /* TODO(P1-02, architecture): UnityEvent를 포함한 상호작용 상태와 순수 타일 데이터를 분리하여
+         * 런타임 저장, 네트워크 동기화 및 단위 테스트에 사용할 수 있게 합니다.
+         */
         public HexGrid(int q, int r)
         {
             _hexPoint = new(q, r);
@@ -177,7 +179,8 @@ namespace Jeomseon.HexGrid
             int rMin = Mathf.Max(-limit, -q - limit);
             int index = (2 * limit + 1) * (q + limit);
 
-            // TODO(검증): 좌표별 인덱스가 연속적이고 중복되지 않는지 경계값 단위 테스트를 보강합니다.
+            /* TODO(P0-01, correctness): 좌표별 인덱스가 연속적이고 중복되지 않는지 경계값 단위 테스트를 보강합니다.
+             */
             for (int i = -limit; i < q; i++)
             {
                 index -= Mathf.Abs(i);

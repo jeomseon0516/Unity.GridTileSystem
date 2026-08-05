@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using Jeomseon.Editor.GUI;
-using Jeomseon.Extensions;
+using Jeomseon.Collections;
 
 namespace Jeomseon.HexGrid.Editor
 {
@@ -15,9 +15,6 @@ namespace Jeomseon.HexGrid.Editor
     [CustomEditor(typeof(GridManager))]
     internal sealed class GridManagerInspector : Editor
     {
-        // TODO(리팩토링): private 필드 리플렉션 접근을 제거하고 GridManager가 제공하는
-        // 에디터 전용 읽기 API 또는 SerializedProperty 기반 구현으로 변경합니다.
-        // TODO(확장): 다량의 타일 라벨은 가시 범위와 확대 수준에 따라 선별해 Scene View 부하를 줄입니다.
         public readonly struct HexGUIData
         {
             public Vector3 TilePosition { get; }
@@ -40,6 +37,9 @@ namespace Jeomseon.HexGrid.Editor
         private Vector2 _scrollPosition = Vector2.zero;
         private int _tileCount = 0;
 
+        /* TODO(P1-03, architecture): private 필드 리플렉션 접근을 제거하고 GridManager가 제공하는
+         * 에디터 전용 읽기 API 또는 SerializedProperty 기반 구현으로 변경합니다.
+         */
         private void OnEnable()
         {
             _gridManager = (target as GridManager)!;
@@ -117,11 +117,14 @@ namespace Jeomseon.HexGrid.Editor
                     
                     _hexGrids
                         .Select(grid => new GameObject($"Index_{grid.Index}"))
-                        .ForEach(player => player.SetParent(_gridManager.RootObject, false));
+                        .ForEach(player =>
+                            player.transform.SetParent(_gridManager.RootObject.transform, false));
                 }
             }
         }
 
+        /* TODO(P2-03, performance): 다량의 타일 라벨은 가시 범위와 확대 수준에 따라 선별해 Scene View 부하를 줄입니다.
+         */
         private void OnSceneGUI()
         {
             _style ??= new()

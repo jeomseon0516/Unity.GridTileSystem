@@ -34,9 +34,9 @@ namespace Jeomseon.HexGrid.Editor
             if (!_cachedHexCoordinatesProps.TryGetValue(hash, out HexCoordinatesProp props))
             {
                 props = new(
-                    property.FindPropertyRelative(EditorReflectionHelper.GetBackingFieldName("Q")), 
-                    property.FindPropertyRelative(EditorReflectionHelper.GetBackingFieldName("R")), 
-                    property.FindPropertyRelative(EditorReflectionHelper.GetBackingFieldName("S")));
+                    property.FindPropertyRelative(SerializedPropertyReflection.GetBackingFieldName("Q")),
+                    property.FindPropertyRelative(SerializedPropertyReflection.GetBackingFieldName("R")),
+                    property.FindPropertyRelative(SerializedPropertyReflection.GetBackingFieldName("S")));
 
                 _cachedHexCoordinatesProps.Add(hash, props);
             }
