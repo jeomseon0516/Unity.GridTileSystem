@@ -4,7 +4,7 @@
 
 ## 요구 사항
 
-- Unity 6000.3.15f1 이상
+- Unity 6000.5.7f1 이상
 - Universal Render Pipeline 14.0.11 이상
 - OpenUPM Scoped Registry에 `com.jeomseon.unity` 스코프 등록
 
