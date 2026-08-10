@@ -2,17 +2,23 @@
 
 이 문서는 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따릅니다.
 
-## [0.1.1] - 2026-07-29
-
-- Runtime·Editor·Tests·Samples 어셈블리의 `rootNamespace`와 소스 파일 위치를 namespace에 맞게 정리했습니다.
-
 ## [Unreleased]
 
-### 변경
+## [0.1.3] - 2026-08-10
 
 - Runtime, Editor, Tests, Samples 어셈블리의 `rootNamespace`를 실제 공개 namespace와 일치시켰습니다.
 - `Hex` 중간 폴더를 제거하여 파일 위치와 `Jeomseon.HexGrid` namespace가 일치하도록 정리했습니다.
 - 샘플 코드를 독립적인 Sample asmdef로 분리했습니다.
+- **(Breaking)** Scene View 타일 옵션을 EditorToolkit의 범용 IMGUI 창 `SceneViewInnerWindow`
+  (`0.5.0`에서 제거됨)에서 Unity `Overlay` API 기반 `HexTileOptionOverlay`로 이전했습니다.
+
+## [0.1.2] - 2026-08-05
+
+- Unity 6000.5.7f1을 최소 지원 버전으로 상향했습니다.
+
+## [0.1.1] - 2026-07-29
+
+- Runtime·Editor·Tests·Samples 어셈블리의 `rootNamespace`와 소스 파일 위치를 namespace에 맞게 정리했습니다.
 
 ## [0.1.0] - 2026-07-29
 
@@ -36,8 +42,3 @@
 ### 수정
 
 - `HexCoordinates`에서 `Vector3` 변환 시 S 좌표 대신 R 좌표가 중복되던 문제
-
-
-## [0.1.2] - 2026-08-05
-
-- Unity 6000.5.7f1을 최소 지원 버전으로 상향했습니다.

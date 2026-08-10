@@ -1,6 +1,6 @@
 {
   "name": "com.jeomseon.unity.grid-tile-system",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "displayName": "Jeomseon Unity Grid Tile System",
   "description": "육각형 그리드 좌표, 타일 상호작용 및 URP 데칼 기반 시각화를 제공하는 Unity 패키지입니다.",
   "unity": "6000.5",
@@ -9,7 +9,7 @@
   "dependencies": {
     "com.jeomseon.unity.attributes": "0.2.1",
     "com.jeomseon.unity.core": "0.1.2",
-    "com.jeomseon.unity.editor-toolkit": "0.3.1",
+    "com.jeomseon.unity.editor-toolkit": "0.5.0",
     "com.unity.inputsystem": "1.7.0",
     "com.unity.render-pipelines.universal": "14.0.11"
   },

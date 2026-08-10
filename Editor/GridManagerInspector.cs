@@ -4,7 +4,6 @@ using System.Reflection;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
-using Jeomseon.Editor.GUI;
 using Jeomseon.Collections;
 
 namespace Jeomseon.HexGrid.Editor
@@ -33,8 +32,7 @@ namespace Jeomseon.HexGrid.Editor
         private GridManager _gridManager = null;
         private GUIStyle _style = null;
         private SerializedProperty _currentHexProperty = null;
-        private SceneViewInnerWindow<GridManagerInspector> _hexOptionWindow = new();
-        private Vector2 _scrollPosition = Vector2.zero;
+        private HexTileOptionOverlay _hexOptionOverlay = null;
         private int _tileCount = 0;
 
         /* TODO(P1-03, architecture): private 필드 리플렉션 접근을 제거하고 GridManager가 제공하는
@@ -44,12 +42,15 @@ namespace Jeomseon.HexGrid.Editor
         {
             _gridManager = (target as GridManager)!;
             InitializeTile();
-            _hexOptionWindow.OnEnable();
+            _hexOptionOverlay = new();
+            SceneView.AddOverlayToActiveView(_hexOptionOverlay);
         }
 
         private void OnDisable()
         {
-            _hexOptionWindow.OnDisable();
+            _hexOptionOverlay?.Hide();
+            SceneView.RemoveOverlayFromActiveView(_hexOptionOverlay);
+            _hexOptionOverlay = null;
             _currentHexProperty = null;
         }
 
@@ -137,25 +138,7 @@ namespace Jeomseon.HexGrid.Editor
             };
 
             Event currentEvent = Event.current;
-            if (_currentHexProperty is not null)
-            {
-                _hexOptionWindow.OnSceneGUI(id =>
-                {
-                    using EditorGUILayout.ScrollViewScope scrollScope = new(_scrollPosition);
-                    _scrollPosition = scrollScope.scrollPosition;
-
-                    using EditorGUI.ChangeCheckScope changeCheckScope = new();
-                    EditorGUILayout.PropertyField(_currentHexProperty, true);
-                    
-                    if (changeCheckScope.changed)
-                    {
-                        serializedObject.ApplyModifiedProperties();
-                    }
-                });
-            }
-            
-            if (!_hexOptionWindow.IsUse && 
-                currentEvent.type == EventType.MouseUp && 
+            if (currentEvent.type == EventType.MouseUp &&
                 currentEvent.button == 0 && 
                 _gridManager.TryGetTileDataByRay(HandleUtility.GUIPointToWorldRay(currentEvent.mousePosition), out (bool, RaycastHit) _, out IHexGrid hexGrid))
             {
@@ -166,6 +149,7 @@ namespace Jeomseon.HexGrid.Editor
                     .GetArrayElementAtIndex(index);
 
                 _currentHexProperty.isExpanded = true;
+                _hexOptionOverlay.ShowProperty(_currentHexProperty);
                 currentEvent.Use();
             }
             

@@ -14,6 +14,8 @@
    - GridManager가 명시적인 Editor 조회 API 또는 SerializedProperty 경로를 제공합니다.
 5. **P2-01~03 — 부분 갱신과 Scene View 최적화**
    - 변경 영역만 계산하고 ComputeBuffer를 재사용하며 라벨을 가시 범위로 제한합니다.
+   - Scene View 타일 옵션 UI는 EditorToolkit의 범용 IMGUI 창 대신 Unity `Overlay` API로
+     이전했습니다(완료).
 6. **P3-01 — 렌더링 백엔드 추상화**
    - URP Decal 구현을 인터페이스 뒤로 격리해 다른 파이프라인 확장을 허용합니다.
 7. **P3-02 — SerializedDictionary 연동**
