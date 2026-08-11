@@ -1,20 +1,21 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Jeomseon.HexGrid.Samples
 {
     public sealed class GridTileSystemSample : MonoBehaviour
     {
-        [SerializeField] private GridManager _gridManager;
+        [SerializeField, FormerlySerializedAs("_gridManager")] private GridManager gridManager;
 
         private void Start()
         {
-            if (_gridManager == null)
+            if (gridManager == null)
             {
                 return;
             }
 
-            Debug.Log($"생성된 육각 타일 수: {_gridManager.GetGrids().Count}");
-            _gridManager.OnEnterTile += HandleEnterTile;
+            Debug.Log($"생성된 육각 타일 수: {gridManager.GetGrids().Count}");
+            gridManager.OnEnterTile += HandleEnterTile;
         }
 
         private static void HandleEnterTile(IHexGrid tile)

@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-08-11
+
+- 워크스페이스 명명 규칙에 맞춰 `GridManager`·`HexGrid`의 `[SerializeField] private` 필드를
+  `_camelCase`에서 `camelCase`로 정리하고(`[FormerlySerializedAs]`로 기존 이름 보존),
+  `GridManager`의 `SCREAMING_SNAKE_CASE` 상수를 `PascalCase`로 정리했습니다.
+  `GridManagerInspector`의 reflection·`FindProperty` 문자열도 함께 갱신했습니다. 공개 API 변경은
+  없으며 기존 Scene·Prefab의 직렬화된 값은 그대로 유지됩니다. (Scene Sample 자산 추가는 이
+  패키지의 안정화 착수 시점으로 보류합니다 — `handoffs/current.md` 참고.)
+
 ## [0.1.3] - 2026-08-10
 
 - Runtime, Editor, Tests, Samples 어셈블리의 `rootNamespace`를 실제 공개 namespace와 일치시켰습니다.

@@ -59,7 +59,7 @@ namespace Jeomseon.HexGrid.Editor
             _tileCount = _gridManager.TileCount;
             _hexGrids = (_gridManager
                 .GetType()
-                .GetField("_hexGrids", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetField("hexGrids", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .GetValue(_gridManager) as List<HexGrid>)!;
 
             _hexGridDescriptions.Clear();
@@ -145,7 +145,7 @@ namespace Jeomseon.HexGrid.Editor
                 int index = _hexGrids.IndexOf((HexGrid)hexGrid);
 
                 _currentHexProperty = serializedObject
-                    .FindProperty("_hexGrids")
+                    .FindProperty("hexGrids")
                     .GetArrayElementAtIndex(index);
 
                 _currentHexProperty.isExpanded = true;

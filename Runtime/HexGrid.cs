@@ -26,114 +26,114 @@ namespace Jeomseon.HexGrid
 
         public bool IsActive
         {
-            get => _isActive;
+            get => isActive;
             set
             {
-                _isActive = value;
-                _onChangedActive.Invoke(this, _isActive);
+                isActive = value;
+                onChangedActive.Invoke(this, isActive);
             }
         }
         public Color Color
         {
-            get => _color;
+            get => color;
             set
             {
-                _color = value;
-                _onChangedColor.Invoke(this, _color);
+                color = value;
+                onChangedColor.Invoke(this, color);
             }
         }
 
-        public IReadOnlyList<string> Properties => _properties;
+        public IReadOnlyList<string> Properties => properties;
 
-        public HexCoordinates HexPoint => _hexPoint;
+        public HexCoordinates HexPoint => hexPoint;
 
-        [SerializeField] private List<string> _properties = new();
-        [SerializeField, ReadOnly] private HexCoordinates _hexPoint = new();
+        [SerializeField, FormerlySerializedAs("_properties")] private List<string> properties = new();
+        [SerializeField, ReadOnly, FormerlySerializedAs("_hexPoint")] private HexCoordinates hexPoint = new();
 
-        [SerializeField] private bool _isActive = true;
-        [SerializeField] private Color _color = Color.cyan;
+        [SerializeField, FormerlySerializedAs("_isActive")] private bool isActive = true;
+        [SerializeField, FormerlySerializedAs("_color")] private Color color = Color.cyan;
 
         public event UnityAction<IHexGrid> OnEnterTile
         {
-            add => _onEnterTile.AddListener(value);
-            remove => _onEnterTile.RemoveListener(value);
+            add => onEnterTile.AddListener(value);
+            remove => onEnterTile.RemoveListener(value);
         }
 
         public event UnityAction<IHexGrid> OnExitTile
         {
-            add => _onExitTile.AddListener(value);
-            remove => _onExitTile.RemoveListener(value);
+            add => onExitTile.AddListener(value);
+            remove => onExitTile.RemoveListener(value);
         }
 
         public event UnityAction<IHexGrid> OnMouseDownTile
         {
-            add => _onMouseDownTile.AddListener(value);
-            remove => _onMouseDownTile.RemoveListener(value);
+            add => onMouseDownTile.AddListener(value);
+            remove => onMouseDownTile.RemoveListener(value);
         }
 
         public event UnityAction<IHexGrid> OnMouseUpTile
         {
-            add => _onMouseUpTile.AddListener(value);
-            remove => _onMouseUpTile.RemoveListener(value);
+            add => onMouseUpTile.AddListener(value);
+            remove => onMouseUpTile.RemoveListener(value);
         }
 
         public event UnityAction<IHexGrid, bool> OnChangedActive
         {
-            add => _onChangedActive.AddListener(value);
-            remove => _onChangedActive.RemoveListener(value);
+            add => onChangedActive.AddListener(value);
+            remove => onChangedActive.RemoveListener(value);
         }
 
         public event UnityAction<IHexGrid, Color> OnChangedColor
         {
-            add => _onChangedColor.AddListener(value);
-            remove => _onChangedColor.RemoveListener(value);
+            add => onChangedColor.AddListener(value);
+            remove => onChangedColor.RemoveListener(value);
         }
 
         [FormerlySerializedAs("_onHighlightTile")]
         [Header("Interactable Events")]
-        [SerializeField] private UnityEvent<IHexGrid> _onEnterTile = new();
-        [SerializeField] private UnityEvent<IHexGrid> _onExitTile = new();
-        [SerializeField] private UnityEvent<IHexGrid> _onMouseUpTile = new();
-        [SerializeField] private UnityEvent<IHexGrid> _onMouseDownTile = new();
+        [SerializeField, FormerlySerializedAs("_onEnterTile")] private UnityEvent<IHexGrid> onEnterTile = new();
+        [SerializeField, FormerlySerializedAs("_onExitTile")] private UnityEvent<IHexGrid> onExitTile = new();
+        [SerializeField, FormerlySerializedAs("_onMouseUpTile")] private UnityEvent<IHexGrid> onMouseUpTile = new();
+        [SerializeField, FormerlySerializedAs("_onMouseDownTile")] private UnityEvent<IHexGrid> onMouseDownTile = new();
 
         [Header("Value Changed Events")]
-        [SerializeField] private UnityEvent<IHexGrid, bool> _onChangedActive = new();
-        [SerializeField] private UnityEvent<IHexGrid, Color> _onChangedColor = new();
+        [SerializeField, FormerlySerializedAs("_onChangedActive")] private UnityEvent<IHexGrid, bool> onChangedActive = new();
+        [SerializeField, FormerlySerializedAs("_onChangedColor")] private UnityEvent<IHexGrid, Color> onChangedColor = new();
 
         public void AddProperty(string property)
         {
-            _properties.Add(property);
+            properties.Add(property);
         }
 
         public bool RemoveProperty(string property)
         {
-            return _properties.RemoveAll(p => property == p) > 0;
+            return properties.RemoveAll(p => property == p) > 0;
         }
 
         public void InvokeOnEnterTile()
         {
-            _onEnterTile.Invoke(this);
+            onEnterTile.Invoke(this);
         }
 
         public void InvokeOnExitTile()
         {
-            _onExitTile.Invoke(this);
+            onExitTile.Invoke(this);
         }
 
         public void InvokeOnMouseUpTile()
         {
-            _onMouseUpTile.Invoke(this);
+            onMouseUpTile.Invoke(this);
         }
 
         public void InvokeOnMouseDownTile()
         {
-            _onMouseDownTile.Invoke(this);
+            onMouseDownTile.Invoke(this);
         }
 
         public HexOption GetShaderOption() => new()
         {
-            Color = _color.ToRgbVector(),
-            IsActive = _isActive ? 1 : 0
+            Color = color.ToRgbVector(),
+            IsActive = isActive ? 1 : 0
         };
 
         public void SetTilePosition(in Vector3 tilePosition)
@@ -158,7 +158,7 @@ namespace Jeomseon.HexGrid
 
         public HexGrid(in AxialCoordinates axialCoordinates)
         {
-            _hexPoint = axialCoordinates;
+            hexPoint = axialCoordinates;
         }
 
         /* TODO(P1-02, architecture): UnityEvent를 포함한 상호작용 상태와 순수 타일 데이터를 분리하여
@@ -166,15 +166,15 @@ namespace Jeomseon.HexGrid
          */
         public HexGrid(int q, int r)
         {
-            _hexPoint = new(q, r);
-            _onChangedActive.SetPersistentListenerState(UnityEventCallState.EditorAndRuntime);
-            _onChangedColor.SetPersistentListenerState(UnityEventCallState.EditorAndRuntime);
+            hexPoint = new(q, r);
+            onChangedActive.SetPersistentListenerState(UnityEventCallState.EditorAndRuntime);
+            onChangedColor.SetPersistentListenerState(UnityEventCallState.EditorAndRuntime);
         }
 
         public int GetHexIndex(int limit)
         {
-            int q = _hexPoint.Q;
-            int r = _hexPoint.R;
+            int q = hexPoint.Q;
+            int r = hexPoint.R;
 
             int rMin = Mathf.Max(-limit, -q - limit);
             int index = (2 * limit + 1) * (q + limit);
@@ -194,12 +194,12 @@ namespace Jeomseon.HexGrid
         #if UNITY_EDITOR
         private void HandleActiveChangedInEditor()
         {
-            _onChangedActive.Invoke(this, _isActive);
+            onChangedActive.Invoke(this, isActive);
         }
 
         private void HandleColorChangedInEditor()
         {
-            _onChangedColor.Invoke(this, _color);
+            onChangedColor.Invoke(this, color);
         }
         #endif
     }
