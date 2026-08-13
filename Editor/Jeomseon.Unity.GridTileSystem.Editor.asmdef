@@ -1,6 +1,6 @@
 {
   "name": "Jeomseon.Unity.GridTileSystem.Editor",
-  "rootNamespace": "Jeomseon.Unity.GridTileSystem",
+  "rootNamespace": "Jeomseon.Unity.GridTileSystem.Editor",
   "references": [
     "Jeomseon.Unity.GridTileSystem",
     "Jeomseon.Unity.Core",
