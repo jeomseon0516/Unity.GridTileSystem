@@ -6,10 +6,10 @@ using UnityEngine.Events;
 using UnityEngine.InputSystem;
 using UnityEngine.Serialization;
 using UnityEngine.Rendering.Universal;
-using Jeomseon.Attribute;
+using Jeomseon.Unity.Attributes;
 using Jeomseon.Collections;
 
-namespace Jeomseon.HexGrid
+namespace Jeomseon.Unity.GridTileSystem
 {
     public sealed class GridManager : MonoBehaviour, ISerializationCallbackReceiver
     {

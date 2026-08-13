@@ -3,9 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
-using Jeomseon.Editor;
+using Jeomseon.Unity.EditorToolkit.Editor;
 
-namespace Jeomseon.HexGrid.Editor
+namespace Jeomseon.Unity.GridTileSystem.Editor
 {
     [CustomPropertyDrawer(typeof(AxialCoordinates))]
     internal sealed class AxialCoordinatesPropertyDrawer : PropertyDrawer

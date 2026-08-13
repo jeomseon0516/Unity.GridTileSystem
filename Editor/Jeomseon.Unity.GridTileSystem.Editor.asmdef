@@ -1,6 +1,6 @@
 {
   "name": "Jeomseon.Unity.GridTileSystem.Editor",
-  "rootNamespace": "Jeomseon.HexGrid.Editor",
+  "rootNamespace": "Jeomseon.Unity.GridTileSystem",
   "references": [
     "Jeomseon.Unity.GridTileSystem",
     "Jeomseon.Unity.Core",

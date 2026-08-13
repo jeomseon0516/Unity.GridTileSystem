@@ -2,7 +2,11 @@
 
 이 문서는 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따릅니다.
 
-## [Unreleased]
+## [0.2.0] - 2026-08-13
+
+- **(Breaking)** 개명 전 `Jeomseon.HexGrid` Runtime/Editor 네임스페이스를 패키지 규칙에 맞춰
+  `Jeomseon.Unity.GridTileSystem`과 `Jeomseon.Unity.GridTileSystem.Editor`로 변경했습니다. 이전
+  네임스페이스 호환 별칭은 제공하지 않습니다.
 
 ## [0.1.4] - 2026-08-11
 

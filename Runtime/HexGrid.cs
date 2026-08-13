@@ -4,11 +4,11 @@ using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Serialization;
-using Jeomseon.Attribute;
-using Jeomseon.Events;
-using Jeomseon.Mathematics;
+using Jeomseon.Unity.Attributes;
+using Jeomseon.Unity.Core.Events;
+using Jeomseon.Unity.Core.Mathematics;
 
-namespace Jeomseon.HexGrid
+namespace Jeomseon.Unity.GridTileSystem
 {
     [StructLayout(LayoutKind.Sequential)]
     public struct HexOption

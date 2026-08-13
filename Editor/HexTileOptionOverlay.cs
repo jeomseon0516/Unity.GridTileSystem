@@ -4,7 +4,7 @@ using UnityEditor.Overlays;
 using UnityEditor.UIElements;
 using UnityEngine.UIElements;
 
-namespace Jeomseon.HexGrid.Editor
+namespace Jeomseon.Unity.GridTileSystem.Editor
 {
     [Overlay(typeof(SceneView), OverlayId, "Hex Tile Option", false)]
     internal sealed class HexTileOptionOverlay : Overlay

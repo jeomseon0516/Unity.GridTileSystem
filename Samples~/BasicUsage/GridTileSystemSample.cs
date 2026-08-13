@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Serialization;
+using Jeomseon.Unity.GridTileSystem;
 
 namespace Jeomseon.HexGrid.Samples
 {

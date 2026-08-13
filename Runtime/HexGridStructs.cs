@@ -1,10 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using Jeomseon.Attribute;
+using Jeomseon.Unity.Attributes;
 using UnityEngine.Serialization;
 
-namespace Jeomseon.HexGrid
+namespace Jeomseon.Unity.GridTileSystem
 {
     [System.Serializable]
     public struct AxialCoordinates : System.IEquatable<AxialCoordinates>

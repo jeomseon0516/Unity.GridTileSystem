@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace Jeomseon.HexGrid
+namespace Jeomseon.Unity.GridTileSystem
 {
     public interface IHexGrid
     {

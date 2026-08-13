@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEditor;
 using Jeomseon.Collections;
 
-namespace Jeomseon.HexGrid.Editor
+namespace Jeomseon.Unity.GridTileSystem.Editor
 {
     using Editor = UnityEditor.Editor;
     using Event = UnityEngine.Event;
