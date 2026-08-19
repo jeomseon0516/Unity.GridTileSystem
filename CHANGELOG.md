@@ -2,6 +2,16 @@
 
 이 문서는 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따릅니다.
 
+## [Unreleased]
+
+- 레이캐스트 타일 피킹의 큐브 좌표 라운딩에서 S 성분 보정이 자기 자신(`roundHex.z`)을 참조해
+  Q+R+S=0 불변식이 깨지고 엉뚱한(때로는 존재하지 않는) 타일이 선택되던 결함을 수정했습니다.
+  라운딩 로직을 `GridManager`에서 `HexCoordinates.Round(Vector2)` 정적 메서드로 추출해 순수
+  단위 테스트로 검증 가능하게 했습니다.
+- `HexGrid.GetHexIndex`(축 좌표별 인덱스 매핑)가 경계값·음수 좌표를 포함해 연속적이고 중복 없는
+  인덱스를 만드는지 확인하는 회귀 테스트를 추가했습니다(수학적으로는 기존부터 올바른 구현이었고,
+  테스트 공백만 채웠습니다).
+
 ## [0.2.0] - 2026-08-13
 
 - **(Breaking)** 개명 전 `Jeomseon.HexGrid` Runtime/Editor 네임스페이스를 패키지 규칙에 맞춰

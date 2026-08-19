@@ -179,8 +179,6 @@ namespace Jeomseon.Unity.GridTileSystem
             int rMin = Mathf.Max(-limit, -q - limit);
             int index = (2 * limit + 1) * (q + limit);
 
-            /* TODO(P0-01, correctness): 좌표별 인덱스가 연속적이고 중복되지 않는지 경계값 단위 테스트를 보강합니다.
-             */
             for (int i = -limit; i < q; i++)
             {
                 index -= Mathf.Abs(i);

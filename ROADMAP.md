@@ -4,8 +4,25 @@
 
 ## 작업 순서
 
-1. **P0-01 — 좌표·인덱스 정확성**
-   - 경계값, 중복, 음수 좌표 및 좌표 변환 왕복 테스트를 보강합니다.
+1. **완료(코드) — P0-01 — 좌표·인덱스 정확성** (2026-08-19, Unity 실측은 아직 안 됨)
+   - **실제 결함 발견·수정**: `GridManager.TryGetTileDataByRayInternal`의 레이캐스트 타일 피킹이
+     쓰던 큐브 좌표 라운딩(cube coordinate rounding)에서, S 성분의 오차가 가장 클 때
+     `hexCoordinates.z = -roundHex.x - roundHex.y`여야 할 보정식이 `-roundHex.z - roundHex.y`로
+     **자기 자신(z)을 참조**하고 있었습니다. 예를 들어 축 좌표 (0.3, 0.3)을 넣으면 올바른 결과는
+     (0,0,0)인데 이 버그로 (0,0,1)이 나와 `Q+R+S=0` 불변식 자체가 깨졌습니다 — 단순히 인접 타일이
+     아니라 **존재할 수 없는 좌표**가 선택될 수 있었습니다(테스트로 재현·고정: `Round_Always
+     SatisfiesCubeCoordinateInvariant`, `Round_WhenSHasTheLargestRoundingError_...`).
+   - 이 라운딩 로직을 `GridManager`에서 `HexCoordinates.Round(in Vector2)` 정적 메서드로
+     추출했습니다(`HexGridStructs.cs`) — `Physics.Raycast` 없이 순수 단위 테스트로 검증 가능해졌고,
+     `GridManager` 쪽 코드도 20여 줄에서 3줄로 줄었습니다.
+   - `HexGrid.GetHexIndex`(축 좌표 → 연속 인덱스 매핑)는 직접 유도해보니 수학적으로 이미
+     올바른 구현이었습니다(경계 폭 공식·누적합 보정 모두 정확). 기존에 남아 있던 TODO는 "검증이
+     안 됨"이었지 "버그가 있음"이 아니었던 것으로 확인 — `HexGridIndexTests`로 limit
+     0/1/2/3/5에 대해 인덱스가 `0..TileCount-1` 범위에서 연속·중복 없음을 확인하는 회귀 테스트를
+     추가하고 TODO 주석은 제거했습니다.
+   - `Runtime`/`Tests` 모두 `dotnet build`로 컴파일 오류 0개 확인(신규 테스트 파일은
+     `TestProject`의 stale csproj에 `<Compile Include>`를 수동 추가해 검증). 실제 Unity Test
+     Runner 실행과 Scene에서의 레이캐스트 피킹 육안 확인은 아직 안 함.
 2. **P1-01 — GridManager 책임 분리**
    - 입력, Raycast, 타일 데이터, 선택 상태, GPU 갱신을 독립 서비스로 분리합니다.
 3. **P1-02 — 순수 타일 데이터와 Unity 이벤트 분리**

@@ -239,34 +239,9 @@ namespace Jeomseon.Unity.GridTileSystem
                     TwoFDivideThree * convertedPosition.x / HexagonRadius,
                     (NegativeOneFDivideThree * convertedPosition.x + SquareRootThreeDivideThree * convertedPosition.y) / HexagonRadius);
 
-                float sFloat = -axialCoordinates.x - axialCoordinates.y;
+                HexCoordinates hexCoordinates = HexCoordinates.Round(axialCoordinates);
 
-                Vector3Int roundHex = new(
-                    Mathf.RoundToInt(axialCoordinates.x),
-                    Mathf.RoundToInt(axialCoordinates.y),
-                    Mathf.RoundToInt(sFloat));
-
-                Vector3 hexDifferent = new(
-                    Mathf.Abs(roundHex.x - axialCoordinates.x),
-                    Mathf.Abs(roundHex.y - axialCoordinates.y),
-                    Mathf.Abs(roundHex.z - sFloat));
-
-                Vector3Int hexCoordinates = roundHex;
-
-                switch (hexDifferent)
-                {
-                    case var _ when hexDifferent.x > hexDifferent.y && hexDifferent.x > hexDifferent.z:
-                        hexCoordinates.x = -roundHex.y - roundHex.z;
-                        break;
-                    case var _ when hexDifferent.y > hexDifferent.z:
-                        hexCoordinates.y = -roundHex.x - roundHex.z;
-                        break;
-                    default:
-                        hexCoordinates.z = -roundHex.z - roundHex.y;
-                        break;
-                }
-
-                if (_hexGridLookup.TryGetValue(new(hexCoordinates.x, hexCoordinates.y), out HexGrid hex))
+                if (_hexGridLookup.TryGetValue(hexCoordinates, out HexGrid hex))
                 {
                     hexGrid = hex;
                     return hex.IsActive;
