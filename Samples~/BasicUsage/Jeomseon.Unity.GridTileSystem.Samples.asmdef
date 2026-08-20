@@ -1,6 +1,6 @@
 {
   "name": "Jeomseon.Unity.GridTileSystem.Samples",
-  "rootNamespace": "Jeomseon.HexGrid.Samples",
+  "rootNamespace": "Jeomseon.Unity.GridTileSystem.Samples.BasicUsage",
   "references": [
     "Jeomseon.Unity.GridTileSystem"
   ],

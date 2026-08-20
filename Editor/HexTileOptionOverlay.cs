@@ -11,14 +11,26 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
     {
         private const string OverlayId = "jeomseon.gridtilesystem.hextileoption";
 
-        private ScrollView _scrollView;
+        private VisualElement _root;
+        private ScrollView _propertyScrollView;
         private SerializedProperty _hexProperty;
 
         public override VisualElement CreatePanelContent()
         {
-            _scrollView = new ScrollView { style = { minWidth = 220, maxHeight = 300 } };
+            _root = new VisualElement { style = { minWidth = 220, maxHeight = 340 } };
+            Slider opacitySlider = new("Content Opacity", 0.35f, 1f)
+            {
+                value = 0.95f,
+                showInputField = true
+            };
+            opacitySlider.RegisterValueChangedCallback(change =>
+                _propertyScrollView.style.opacity = change.newValue);
+            _root.Add(opacitySlider);
+
+            _propertyScrollView = new ScrollView { style = { maxHeight = 300, opacity = opacitySlider.value } };
+            _root.Add(_propertyScrollView);
             RefreshContent();
-            return _scrollView;
+            return _root;
         }
 
         public void ShowProperty(SerializedProperty hexProperty)
@@ -32,17 +44,17 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
         {
             _hexProperty = null;
             displayed = false;
-            _scrollView?.Clear();
+            _propertyScrollView?.Clear();
         }
 
         private void RefreshContent()
         {
-            if (_scrollView is null)
+            if (_propertyScrollView is null)
             {
                 return;
             }
 
-            _scrollView.Clear();
+            _propertyScrollView.Clear();
 
             if (_hexProperty is null)
             {
@@ -51,7 +63,7 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
 
             var propertyField = new PropertyField(_hexProperty);
             propertyField.Bind(_hexProperty.serializedObject);
-            _scrollView.Add(propertyField);
+            _propertyScrollView.Add(propertyField);
         }
     }
 }

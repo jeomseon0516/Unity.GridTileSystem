@@ -2,7 +2,7 @@ using NUnit.Framework;
 using UnityEngine;
 using Jeomseon.Unity.GridTileSystem;
 
-namespace Jeomseon.HexGrid.Tests
+namespace Jeomseon.Unity.GridTileSystem.Tests
 {
     public sealed class HexCoordinatesTests
     {

@@ -4,8 +4,8 @@
   "references": [
     "Jeomseon.Unity.Attributes",
     "Jeomseon.Unity.Core",
-    "Unity.InputSystem",
-    "Unity.RenderPipelines.Universal.Runtime"
+    "Jeomseon.Unity.Projector",
+    "Unity.InputSystem"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

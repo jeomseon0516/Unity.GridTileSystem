@@ -4,7 +4,8 @@
   "references": [
     "Jeomseon.Unity.GridTileSystem",
     "Jeomseon.Unity.Core",
-    "Jeomseon.Unity.EditorToolkit.Editor"
+    "Jeomseon.Unity.EditorToolkit.Editor",
+    "Jeomseon.Unity.Projector"
   ],
   "includePlatforms": [
     "Editor"
