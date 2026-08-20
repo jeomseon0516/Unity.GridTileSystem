@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+- **(Breaking)** `GridManager`의 `HexagonRadius`/`TileLimit`/`LayerMask`가 자체 직렬화 필드에서
+  새 `HexGridSettings : ScriptableObject`(`Runtime/HexGridSettings.cs`) 참조로 이동했습니다.
+  마이그레이션: `HexGridSettings` asset을 생성해 기존 세 값을 옮기고 `GridManager`의 새
+  `settings` 필드에 할당하세요. `decalProjector`/`mainCamera`/`RootObject`/`hexGrids`는 그대로
+  `GridManager`에 남아 있습니다.
+- `GridManager`의 입력·Raycast·타일 데이터·선택 상태·GPU 갱신 책임을 `Runtime/Services/`의 5개
+  독립 서비스(`HexGridPointerInput`/`HexGridTilePicker`/`HexGridTileDataStore`/
+  `HexGridSelectionState`/`HexOptionBufferUploader`)로 분리했습니다(P1-01). `hexGrids` 필드는
+  이름·직렬화 위치를 유지해 P1-03 대상 reflection/`FindProperty` 접근에 영향이 없습니다.
+- `OnEnterTile`/`OnExitTile`/`OnMouseDownTile`/`OnMouseUpTile`이 매 이벤트마다 리스너를 2회씩
+  호출하던 버그를 수정했습니다.
+- Runtime 스크립트로 `HexagonRadius`를 바꿔도 DecalProjector 머티리얼이 갱신되지 않던 문제를
+  수정했습니다(설정 asset의 `SettingsChanged` 이벤트로 Editor/Runtime 양쪽에서 항상 갱신).
 - 레이캐스트 타일 피킹의 큐브 좌표 라운딩에서 S 성분 보정이 자기 자신(`roundHex.z`)을 참조해
   Q+R+S=0 불변식이 깨지고 엉뚱한(때로는 존재하지 않는) 타일이 선택되던 결함을 수정했습니다.
   라운딩 로직을 `GridManager`에서 `HexCoordinates.Round(Vector2)` 정적 메서드로 추출해 순수

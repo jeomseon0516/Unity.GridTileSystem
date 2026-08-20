@@ -1,27 +1,16 @@
 using System.Linq;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.InputSystem;
 using UnityEngine.Serialization;
 using UnityEngine.Rendering.Universal;
 using Jeomseon.Unity.Attributes;
-using Jeomseon.Collections;
+using Jeomseon.Unity.GridTileSystem.Services;
 
 namespace Jeomseon.Unity.GridTileSystem
 {
     public sealed class GridManager : MonoBehaviour, ISerializationCallbackReceiver
     {
-        private const float HexagonRadiusMin = 0.025f;
-        private const float HexagonRadiusMax = 0.5f;
-
-        private const float SquareRootThree = 1.732051f;
-        private const float SquareRootThreeHalf = SquareRootThree * 0.5f;
-        private const float SquareRootThreeDivideThree = SquareRootThree / 3;
-        private const float TwoFDivideThree = 2f / 3;
-        private const float NegativeOneFDivideThree = -1f / 3;
-
         public event UnityAction<IHexGrid> OnEnterTile
         {
             add => onEnterTile.AddListener(value);
@@ -45,10 +34,9 @@ namespace Jeomseon.Unity.GridTileSystem
             add => onMouseUpTile.AddListener(value);
             remove => onMouseUpTile.RemoveListener(value);
         }
-        
+
         private static readonly int _absoluteLimit = Shader.PropertyToID("_AbsoluteLimit");
-        private static readonly int _bufferOn = Shader.PropertyToID("_BufferOn");
-        private static readonly int _hexOptions = Shader.PropertyToID("_HexOptions");
+        private static readonly int _radius = Shader.PropertyToID("_Radius");
 
         [FormerlySerializedAs("_onHighlightTile")]
         [Header("Events")]
@@ -57,25 +45,44 @@ namespace Jeomseon.Unity.GridTileSystem
         [SerializeField, FormerlySerializedAs("_onMouseUpTile")] private UnityEvent<IHexGrid> onMouseUpTile = new();
         [SerializeField, FormerlySerializedAs("_onMouseDownTile")] private UnityEvent<IHexGrid> onMouseDownTile = new();
 
+        [Header("Settings")]
+        [SerializeField] private HexGridSettings settings;
+
         /* TODO(P3-02, extensibility): 현재는 패키지 외부 의존성을 줄이기 위해 List를 직렬화합니다.
          * 자체 SerializedDictionary가 별도 패키지로 안정화되면 좌표 기반 직렬화 컬렉션으로 교체를 검토합니다.
          */
         [SerializeField, FormerlySerializedAs("_hexGrids")] private List<HexGrid> hexGrids = new();
-        private readonly Dictionary<AxialCoordinates, HexGrid> _hexGridLookup = new();
 
         [SerializeField, GetOrAddComponent, FormerlySerializedAs("_decalProjector")] private DecalProjector decalProjector;
 
-        [FormerlySerializedAs("_qLimit")]
-        [SerializeField, Min(0), FormerlySerializedAs("_tileLimit")] private int tileLimit = 3;
-
         [SerializeField, FormerlySerializedAs("_mainCamera")] private Camera mainCamera;
 
-        private ComputeBuffer _hexOptionBuffer;
-        private HexGrid _currentHex = null;
-        private static readonly int _radius = Shader.PropertyToID("_Radius");
-
-        [field: SerializeField, Range(HexagonRadiusMin, HexagonRadiusMax)] public float HexagonRadius { get; set; } = 0.025f;
         [field: SerializeField] public GameObject RootObject { get; private set; }
+
+        private bool _servicesInitialized;
+        private IHexGridPointerInput _pointerInput;
+        private IHexGridTilePicker _picker;
+        private IHexGridTileDataStore _tileDataStore;
+        private IHexGridSelectionState _selectionState;
+        private IHexOptionBufferUploader _bufferUploader;
+
+        public float HexagonRadius
+        {
+            get => settings.HexagonRadius;
+            set => settings.HexagonRadius = value;
+        }
+
+        public int TileLimit
+        {
+            get => settings.TileLimit;
+            set => settings.TileLimit = value;
+        }
+
+        public LayerMask LayerMask
+        {
+            get => settings.LayerMask;
+            set => settings.LayerMask = value;
+        }
 
         public float HexagonWidth => HexagonRadius * decalProjector.size.x * 2 * decalProjector.transform.localScale.x;
 
@@ -89,6 +96,7 @@ namespace Jeomseon.Unity.GridTileSystem
         {
             get
             {
+                int tileLimit = settings.TileLimit;
                 int limitDouble = tileLimit * 2;
                 int outerSum = limitDouble * (limitDouble + 1) / 2;
                 int innerSum = tileLimit * (tileLimit + 1) / 2;
@@ -96,25 +104,22 @@ namespace Jeomseon.Unity.GridTileSystem
             }
         }
 
-        public int TileLimit
-        {
-            get => tileLimit;
-            set
-            {
-                tileLimit = value;
-                decalProjector.material.SetFloat(_absoluteLimit, tileLimit);
-            }
-        }
-
-        [field: SerializeField] public LayerMask LayerMask { get; set; }
-
-        /* TODO(P1-01, architecture): 입력 처리, 물리 레이캐스트, 타일 데이터, GPU 버퍼 갱신 책임을
-         * 각각의 서비스로 분리하고 인터페이스로 주입하여 테스트 가능한 구조로 변경합니다.
-         */
         private void Awake()
         {
-            RebuildLookup();
+            EnsureServices();
+            _tileDataStore.RebuildLookup();
             SendToShaderHexOption();
+        }
+
+        private void OnEnable()
+        {
+            EnsureServices();
+            settings.SettingsChanged += HandleSettingsChanged;
+        }
+
+        private void OnDisable()
+        {
+            settings.SettingsChanged -= HandleSettingsChanged;
         }
 
         private void Start()
@@ -128,127 +133,42 @@ namespace Jeomseon.Unity.GridTileSystem
 
         private void Update()
         {
-            Mouse mouse = Mouse.current;
-            if (mouse == null || mainCamera == null)
+            if (!mainCamera || !_pointerInput.TryGetPointer(out Vector2 screenPosition, out bool pressed, out bool released))
             {
                 return;
             }
 
-            Vector2 position = mouse.position.ReadValue();
-            OnHoverMouse(position);
+            Ray ray = mainCamera.ScreenPointToRay(screenPosition);
+            bool found = _picker.TryPick(ray, settings.LayerMask, settings.HexagonRadius, out _, out HexGrid hex);
+            HexGrid pickedHex = found ? hex : null;
 
-            if (mouse.leftButton.wasPressedThisFrame)
+            _selectionState.UpdateHover(pickedHex);
+
+            if (pressed)
             {
-                OnMouseDownEvent(position);
+                _selectionState.NotifyMouseDown(pickedHex);
             }
 
-            if (mouse.leftButton.wasReleasedThisFrame)
+            if (released)
             {
-                OnMouseUpEvent(position);
+                _selectionState.NotifyMouseUp(pickedHex);
             }
         }
 
         private void OnApplicationQuit()
         {
-            _hexOptionBuffer?.Release();
-            _hexOptionBuffer = null;
+            _bufferUploader?.Release();
         }
 
         private void OnDestroy()
         {
-            _hexOptionBuffer?.Release();
-            _hexOptionBuffer = null;
-        }
-
-        private void OnMouseDownEvent(Vector2 mousePosition)
-        {
-            Ray ray = mainCamera.ScreenPointToRay(mousePosition);
-
-            if (TryGetTileDataByRayInternal(ray, out (bool, RaycastHit) _, out HexGrid hex))
-            {
-                hex.InvokeOnMouseDownTile();
-                onMouseDownTile.Invoke(hex);
-            }
-        }
-
-        private void OnMouseUpEvent(Vector2 mousePosition)
-        {
-            Ray ray = mainCamera.ScreenPointToRay(mousePosition);
-
-            if (TryGetTileDataByRayInternal(ray, out (bool, RaycastHit) _, out HexGrid hex))
-            {
-                hex.InvokeOnMouseUpTile();
-                onMouseUpTile.Invoke(hex);
-            }
-        }
-
-        private void OnHoverMouse(Vector2 mousePosition)
-        {
-            Ray ray = mainCamera.ScreenPointToRay(mousePosition);
-
-            if (TryGetTileDataByRayInternal(ray, out (bool, RaycastHit) _, out HexGrid hex))
-            {
-                if (_currentHex != hex)
-                {
-                    HexGrid prevHex = _currentHex;
-                    _currentHex = hex;
-                    _currentHex.InvokeOnEnterTile();
-                    onEnterTile.Invoke(_currentHex);
-
-                    if (prevHex is not null)
-                    {
-                        prevHex.InvokeOnExitTile();
-                        onExitTile.Invoke(prevHex);
-                    }
-                }
-            }
-            else
-            {
-                if (_currentHex is not null)
-                {
-                    _currentHex.InvokeOnExitTile();
-                    onExitTile.Invoke(_currentHex);
-                    _currentHex = null;
-                }
-            }
+            _bufferUploader?.Release();
         }
 
         public void SetActiveAxialCoordinates(int q, int r, bool isActive)
         {
-            if (!_hexGridLookup.TryGetValue(new(q, r), out HexGrid hex)) return;
-
-            hex.IsActive = isActive;
-        }
-
-        private bool TryGetTileDataByRayInternal(in Ray ray, out (bool, RaycastHit) hitTuple, out HexGrid hexGrid)
-        {
-            hexGrid = null;
-            hitTuple.Item1 = false;
-
-            if (Physics.Raycast(ray, out hitTuple.Item2, Mathf.Infinity, LayerMask))
-            {
-                hitTuple.Item1 = true;
-                
-                Vector2 convertedPosition = new(
-                    hitTuple.Item2.point.x - decalProjector.transform.position.x, 
-                    hitTuple.Item2.point.z - decalProjector.transform.position.z);
-                
-                convertedPosition /= decalProjector.size.x * decalProjector.transform.localScale.x;
-
-                Vector2 axialCoordinates = new(
-                    TwoFDivideThree * convertedPosition.x / HexagonRadius,
-                    (NegativeOneFDivideThree * convertedPosition.x + SquareRootThreeDivideThree * convertedPosition.y) / HexagonRadius);
-
-                HexCoordinates hexCoordinates = HexCoordinates.Round(axialCoordinates);
-
-                if (_hexGridLookup.TryGetValue(hexCoordinates, out HexGrid hex))
-                {
-                    hexGrid = hex;
-                    return hex.IsActive;
-                }
-            }
-
-            return false;
+            EnsureServices();
+            _tileDataStore.SetActive(new(q, r), isActive);
         }
 
         /// <summary>
@@ -262,9 +182,10 @@ namespace Jeomseon.Unity.GridTileSystem
         /// <returns></returns>
         public bool TryGetTileDataByRay(in Ray ray, out (bool, RaycastHit) hitTuple, out IHexGrid hexGrid)
         {
-            bool isSuccesses = TryGetTileDataByRayInternal(ray, out hitTuple, out HexGrid hex);
+            EnsureServices();
+            bool isSuccess = _picker.TryPick(ray, settings.LayerMask, settings.HexagonRadius, out hitTuple, out HexGrid hex);
             hexGrid = hex;
-            return isSuccesses;
+            return isSuccess;
         }
 
         public void CalculateTile()
@@ -272,82 +193,8 @@ namespace Jeomseon.Unity.GridTileSystem
             /* TODO(P2-01, performance): 큰 그리드에서는 전체 재계산 대신 변경 영역만 갱신하고,
              * 좌표 계산을 Burst/Jobs로 옮길 수 있도록 순수 계산 계층을 분리합니다.
              */
-            Vector3 projectorSize = decalProjector.size * decalProjector.transform.localScale.x;
-
-            for (int q = -tileLimit; q <= tileLimit; q++)
-            {
-                for (int r = -tileLimit; r <= tileLimit; r++)
-                {
-                    int s = -(q + r);
-                    if (s >= -tileLimit && s <= tileLimit)
-                    {
-                        Vector2 hexNormalizedPosition = new(
-                            HexagonRadius * (1.5f * q),
-                            HexagonRadius * (SquareRootThreeHalf * q + SquareRootThree * r));
-
-                        Vector3 hexPosition = projectorSize.x * hexNormalizedPosition;
-
-                        hexPosition = new(
-                            hexPosition.x + decalProjector.transform.position.x,
-                            0.0f,
-                            hexPosition.y + decalProjector.transform.position.z);
-
-                        Ray ray = new(
-                            new(
-                                hexPosition.x,
-                                decalProjector.transform.position.y + projectorSize.y * 0.5f,
-                                hexPosition.z),
-                            Vector3.down);
-
-                        if (Physics.Raycast(ray, out RaycastHit hit, projectorSize.y, 1 << 3))
-                        {
-                            hexPosition = hit.point;
-                        }
-
-                        AxialCoordinates key = new(q, r);
-                        HexGrid newHex = CreateTile();
-
-                        if (_hexGridLookup.TryGetValue(key, out HexGrid hex))
-                        {
-                            hex.Properties.ForEach(newHex.AddProperty);
-                            newHex.IsActive = hex.IsActive;
-                            newHex.Color = hex.Color;
-                            int index = hexGrids.IndexOf(hex);
-                            hexGrids[index] = newHex;
-                            _hexGridLookup[key] = newHex;
-                        }
-                        else
-                        {
-                            hexGrids.Add(newHex);
-                            _hexGridLookup.Add(key, newHex);
-                        }
-
-                        HexGrid CreateTile()
-                        {
-                            HexGrid createdHex = new(q, r, hexPosition, hexNormalizedPosition + new Vector2(0.5f, 0.5f), tileLimit);
-                            createdHex.OnChangedActive += OnChangedActiveTile;
-                            createdHex.OnChangedColor += OnChangedColorTile;
-                            createdHex.OnEnterTile += onEnterTile.Invoke;
-                            createdHex.OnMouseDownTile += onMouseDownTile.Invoke;
-                            createdHex.OnMouseUpTile += onMouseUpTile.Invoke;
-                            createdHex.OnExitTile += onExitTile.Invoke;
-                            return createdHex;
-                        }
-                    }
-                }
-            }
-
-            SendToShaderHexOption();
-        }
-
-        private void OnChangedActiveTile(IHexGrid iHex, bool isActive)
-        {
-            SendToShaderHexOption();
-        }
-
-        private void OnChangedColorTile(IHexGrid iHex, Color color)
-        {
-            SendToShaderHexOption();
+            EnsureServices();
+            _tileDataStore.Rebuild(decalProjector, settings.HexagonRadius, settings.TileLimit);
         }
 
         /* TODO(P3-01, extensibility): URP DecalProjector 전용 구현을 렌더링 백엔드로 추상화하여
@@ -355,28 +202,15 @@ namespace Jeomseon.Unity.GridTileSystem
          */
         public void SendToShaderHexOption()
         {
-            /* TODO(P2-02, performance): 값 하나가 변경될 때마다 전체 ComputeBuffer를 재생성하지 않고
-             * dirty index만 갱신하며 GraphicsBuffer 사용 가능 여부도 검토합니다.
-             */
-            HexOption[] hexOptions = hexGrids
-                .Select(hex => hex.GetShaderOption())
-                .ToArray();
-            
-            int stride = Marshal.SizeOf<HexOption>();
-            bool isZero = hexOptions.Length > 0;
-
-            decalProjector.material.SetInt(_bufferOn, isZero ? 1 : 0);
-
-            if (isZero)
-            {
-                _hexOptionBuffer?.Release();
-                _hexOptionBuffer = new(hexOptions.Length, stride);
-                _hexOptionBuffer.SetData(hexOptions);
-                decalProjector.material.SetBuffer(_hexOptions, _hexOptionBuffer);
-            }
+            EnsureServices();
+            _bufferUploader.Upload(_tileDataStore.Grids, decalProjector.material);
         }
 
-        public List<IHexGrid> GetGrids() => hexGrids.OfType<IHexGrid>().ToList();
+        public List<IHexGrid> GetGrids()
+        {
+            EnsureServices();
+            return _tileDataStore.Grids.OfType<IHexGrid>().ToList();
+        }
 
         public void OnBeforeSerialize()
         {
@@ -385,34 +219,33 @@ namespace Jeomseon.Unity.GridTileSystem
 
         public void OnAfterDeserialize()
         {
-            RebuildLookup();
+            EnsureServices();
+            _tileDataStore.RebuildLookup();
         }
 
-        private void RebuildLookup()
+        private void EnsureServices()
         {
-            _hexGridLookup.Clear();
+            if (_servicesInitialized) return;
+            _servicesInitialized = true;
 
-            foreach (HexGrid hexGrid in hexGrids)
-            {
-                if (hexGrid is not null)
-                {
-                    _hexGridLookup[hexGrid.HexPoint] = hexGrid;
-                }
-            }
+            _tileDataStore = new HexGridTileDataStore(hexGrids);
+            _picker = new HexGridTilePicker(decalProjector, _tileDataStore);
+            _pointerInput = new HexGridPointerInput();
+            _bufferUploader = new HexOptionBufferUploader();
+            _selectionState = new HexGridSelectionState();
+
+            _selectionState.Entered += onEnterTile.Invoke;
+            _selectionState.Exited += onExitTile.Invoke;
+            _selectionState.MouseDown += onMouseDownTile.Invoke;
+            _selectionState.MouseUp += onMouseUpTile.Invoke;
+
+            _tileDataStore.TileVisualsChanged += () => _bufferUploader.Upload(_tileDataStore.Grids, decalProjector.material);
         }
 
-        #if UNITY_EDITOR
-        [InvokeOnInspectorChange(nameof(tileLimit))]
-        private void OnChangedLimit()
+        private void HandleSettingsChanged()
         {
-            decalProjector.material.SetFloat(_absoluteLimit, tileLimit);
+            decalProjector.material.SetFloat(_absoluteLimit, settings.TileLimit);
+            decalProjector.material.SetFloat(_radius, settings.HexagonRadius);
         }
-
-        [InvokeOnInspectorChange(nameof(HexagonRadius))]
-        private void OnChangedRadius()
-        {
-            decalProjector.material.SetFloat(_radius, HexagonRadius);
-        }
-        #endif
     }
 }

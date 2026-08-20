@@ -23,8 +23,43 @@
    - `Runtime`/`Tests` 모두 `dotnet build`로 컴파일 오류 0개 확인(신규 테스트 파일은
      `TestProject`의 stale csproj에 `<Compile Include>`를 수동 추가해 검증). 실제 Unity Test
      Runner 실행과 Scene에서의 레이캐스트 피킹 육안 확인은 아직 안 함.
-2. **P1-01 — GridManager 책임 분리**
-   - 입력, Raycast, 타일 데이터, 선택 상태, GPU 갱신을 독립 서비스로 분리합니다.
+2. **완료(코드) — P1-01 — GridManager 책임 분리** (2026-08-20, Unity 실측은 아직 안 됨)
+   - `GridManager`(418줄)를 조합 루트로 축소하고, 입력·Raycast·타일 데이터·선택 상태·GPU 갱신을
+     `Runtime/Services/`의 순수 C# 서비스 5개로 분리했습니다: `HexGridPointerInput`(입력),
+     `HexGridTilePicker`(레이캐스트/피킹), `HexGridTileDataStore`(타일 데이터), `HexGridSelectionState`
+     (호버·클릭 디스패치), `HexOptionBufferUploader`(GPU ComputeBuffer 업로드). 각각 인터페이스를
+     가지며 `GridManager.EnsureServices()`에서 조립합니다(TODO가 요구하던 "인터페이스로 주입"
+     충족). `hexGrids` 필드는 이름·직렬화 위치 그대로 `GridManager`에 남겨 P1-03의 reflection/
+     `FindProperty("hexGrids")` 접근이 그대로 유효합니다.
+   - **설정값 ScriptableObject 분리(사용자 요청으로 범위 확장)**: `HexagonRadius`/`TileLimit`/
+     `LayerMask`를 새 `HexGridSettings : ScriptableObject`(`Runtime/HexGridSettings.cs`)로
+     옮겼습니다. `decalProjector`/`mainCamera`/`RootObject`/`hexGrids`는 Scene-로컬 데이터라 그대로
+     `GridManager`에 둡니다. 기존 `[InvokeOnInspectorChange]`(`Jeomseon.Unity.Attributes`) 메커니즘은
+     필드가 별도 asset으로 옮겨가며 더 이상 발화하지 않게 되어 제거했고, 대신
+     `HexGridSettings.OnValidate()` + `SettingsChanged` C# 이벤트로 대체했습니다
+     (`GridManager.OnEnable`/`OnDisable`에서 대칭 구독). 부수 효과로 Runtime 스크립트에서
+     `HexagonRadius`를 바꿔도 이제 DecalProjector 머티리얼이 갱신됩니다(기존엔 에디터 전용
+     콜백만 있어 Runtime 변경이 반영되지 않았음 — 개선). **(Breaking)** `HexagonRadius`/`TileLimit`/
+     `LayerMask`의 직렬화 위치가 `GridManager` 자신에서 `HexGridSettings` asset 참조로 바뀌었습니다
+     — Scene Sample이 아직 없어 마이그레이션할 기존 `.unity` 자산은 없습니다. 다음에 Scene Sample을
+     만들 때 `HexGridSettings` asset도 함께 생성해 `GridManager.settings`에 연결해야 합니다.
+   - **버그 수정**: `OnEnterTile`/`OnExitTile`/`OnMouseDownTile`/`OnMouseUpTile` 4개 이벤트가 전부
+     리스너를 2회씩 호출하던 결함을 고쳤습니다. 원인은 `CalculateTile()`의 `CreateTile`이 타일별
+     이벤트를 매니저 `UnityEvent`에 미리 구독(`createdHex.OnEnterTile += onEnterTile.Invoke`)해두는
+     동시에, 호출부(`OnHoverMouse` 등)에서도 `hex.InvokeOnEnterTile()` 직후
+     `onEnterTile.Invoke(hex)`를 또 직접 호출해 매니저 이벤트가 이중 발화된 것이었습니다.
+     `HexGridSelectionState`가 각 경로(Enter/Exit/MouseDown/MouseUp)를 정확히 1회씩만 발화하도록
+     재설계해 해결했으며, `HexGridSelectionStateTests`에 회귀 테스트를 추가했습니다.
+   - `Update()`가 프레임당 동일한 레이로 피킹을 3회(호버/mousedown/mouseup) 중복 호출하던 것도
+     1회로 합쳤습니다(부수효과 없는 순수 조회라 결과가 항상 같음 — P2-01 성능 재설계가 아니라
+     리팩터 과정에서 자연히 없어진 중복 제거).
+   - 새 테스트: `HexGridTileDataStoreTests`(Rebuild/SetActive/TryGetTile/RebuildLookup/
+     `TileVisualsChanged` 발화), `HexGridSelectionStateTests`(이중 발화 버그 회귀). `Tests`
+     asmdef에 `Unity.RenderPipelines.Universal.Runtime` 참조를 추가해 `DecalProjector`를 직접
+     생성하는 EditMode 테스트가 가능해졌습니다(Physics 의존 지면 스냅 분기는 Edit Mode에서 항상
+     no-hit이라 예외 없이 통과, 정확도 검증은 아님).
+   - `dotnet build`로 Runtime/Editor/Tests 전부 컴파일 오류 0개 확인. **Unity Test Runner 실행과
+     Inspector에서 `HexGridSettings` asset 생성/할당 동작 확인은 아직 안 함.**
 3. **P1-02 — 순수 타일 데이터와 Unity 이벤트 분리**
    - 직렬화 가능한 데이터 모델과 런타임 상호작용 상태의 경계를 정의합니다.
 4. **P1-03 — Inspector Reflection 제거**

@@ -2,7 +2,8 @@
   "name": "Jeomseon.Unity.GridTileSystem.Tests",
   "rootNamespace": "Jeomseon.HexGrid.Tests",
   "references": [
-    "Jeomseon.Unity.GridTileSystem"
+    "Jeomseon.Unity.GridTileSystem",
+    "Unity.RenderPipelines.Universal.Runtime"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"
