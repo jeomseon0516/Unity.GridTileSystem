@@ -2,8 +2,7 @@
   "name": "Jeomseon.Unity.GridTileSystem.Tests",
   "rootNamespace": "Jeomseon.Unity.GridTileSystem.Tests",
   "references": [
-    "Jeomseon.Unity.GridTileSystem",
-    "Jeomseon.Unity.Projector"
+    "Jeomseon.Unity.GridTileSystem"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"

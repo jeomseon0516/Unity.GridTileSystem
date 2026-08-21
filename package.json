@@ -2,7 +2,7 @@
   "name": "com.jeomseon.unity.grid-tile-system",
   "version": "0.2.0",
   "displayName": "Jeomseon Unity Grid Tile System",
-  "description": "육각형 그리드 좌표, 타일 상호작용 및 렌더 파이프라인 비종속 투영 시각화를 제공하는 Unity 패키지입니다.",
+  "description": "Triangle topology와 intrinsic Surface Space 기반 육각 Grid, 상호작용 및 파이프라인 비종속 Mesh 시각화를 제공합니다.",
   "unity": "6000.5",
   "unityRelease": "7f1",
   "license": "MIT",
@@ -10,15 +10,13 @@
     "com.jeomseon.unity.attributes": "0.2.1",
     "com.jeomseon.unity.core": "0.1.2",
     "com.jeomseon.unity.editor-toolkit": "0.5.0",
-    "com.jeomseon.unity.projector": "0.1.0",
-    "com.jeomseon.unity.shaders": "0.1.6",
     "com.unity.inputsystem": "1.7.0"
   },
   "keywords": [
     "grid",
     "tile",
     "hex",
-    "projector"
+    "surface"
   ],
   "author": {
     "name": "jeomseon0516",
@@ -31,7 +29,7 @@
   "samples": [
     {
       "displayName": "Basic Usage",
-      "description": "육각 좌표와 타일 데이터 API를 확인하는 간단한 예제입니다.",
+      "description": "Static Mesh Surface에 정합된 intrinsic 육각 Grid와 vertex-color 표현을 확인하는 예제입니다.",
       "path": "Samples~/BasicUsage"
     }
   ]

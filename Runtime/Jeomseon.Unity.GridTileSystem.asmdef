@@ -4,7 +4,6 @@
   "references": [
     "Jeomseon.Unity.Attributes",
     "Jeomseon.Unity.Core",
-    "Jeomseon.Unity.Projector",
     "Unity.InputSystem"
   ],
   "includePlatforms": [],

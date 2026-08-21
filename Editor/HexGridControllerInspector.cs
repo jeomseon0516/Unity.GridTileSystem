@@ -1,7 +1,6 @@
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
-using Jeomseon.Unity.Projector;
 
 namespace Jeomseon.Unity.GridTileSystem.Editor
 {
@@ -51,7 +50,7 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
             if (!isConfigured)
             {
                 EditorGUILayout.HelpBox(
-                    "Assign HexGridSettings and a compatible MeshProjector effect before rebuilding tiles.",
+                    "Assign Settings and a readable source Mesh/MeshCollider. Output Mesh components are optional, but must be assigned as a pair.",
                     MessageType.Error);
             }
             else
@@ -136,9 +135,18 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
 
         private bool IsConfigured()
         {
-            SerializedProperty projectorProperty = serializedObject.FindProperty("projector");
-            MeshProjector projector = projectorProperty.objectReferenceValue as MeshProjector;
-            return _settingsProperty.objectReferenceValue != null && projector != null && projector.Effect != null;
+            SerializedProperty sourceProperty = serializedObject.FindProperty("sourceMeshFilter");
+            SerializedProperty colliderProperty = serializedObject.FindProperty("surfaceCollider");
+            SerializedProperty outputFilterProperty = serializedObject.FindProperty("outputMeshFilter");
+            SerializedProperty outputRendererProperty = serializedObject.FindProperty("outputMeshRenderer");
+            MeshFilter source = sourceProperty.objectReferenceValue as MeshFilter;
+            MeshCollider surface = colliderProperty.objectReferenceValue as MeshCollider;
+            MeshFilter output = outputFilterProperty.objectReferenceValue as MeshFilter;
+            bool hasOutputFilter = output != null;
+            bool hasOutputRenderer = outputRendererProperty.objectReferenceValue != null;
+            bool validOutput = hasOutputFilter == hasOutputRenderer && (!hasOutputFilter || !ReferenceEquals(source, output));
+            return _settingsProperty.objectReferenceValue != null && source != null && source.sharedMesh != null &&
+                   surface != null && surface.sharedMesh == source.sharedMesh && validOutput;
         }
 
         private void AddOverlay()

@@ -2,10 +2,9 @@
   "name": "Jeomseon.Unity.GridTileSystem.Editor",
   "rootNamespace": "Jeomseon.Unity.GridTileSystem.Editor",
   "references": [
-    "Jeomseon.Unity.GridTileSystem",
-    "Jeomseon.Unity.Core",
-    "Jeomseon.Unity.EditorToolkit.Editor",
-    "Jeomseon.Unity.Projector"
+    "GUID:c9494a906096b8e42a972e44a31ce0cd",
+    "GUID:d2e05d54d427444e8bc09a7e9c0f3d05",
+    "GUID:1eb0a000dfea5436382a4d9a1db46562"
   ],
   "includePlatforms": [
     "Editor"

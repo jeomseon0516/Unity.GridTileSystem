@@ -1,58 +1,58 @@
 using System.Collections.Generic;
+using Jeomseon.Unity.GridTileSystem.Services;
+using Jeomseon.Unity.GridTileSystem.Surface.Core;
+using Jeomseon.Unity.GridTileSystem.Surface.Grid;
 using NUnit.Framework;
 using UnityEngine;
-using Jeomseon.Unity.Projector;
-using Jeomseon.Unity.GridTileSystem;
-using Jeomseon.Unity.GridTileSystem.Services;
 
 namespace Jeomseon.Unity.GridTileSystem.Tests
 {
     public sealed class HexTileStoreTests
     {
-        private GameObject _projectorHost;
-        private MeshProjector _projector;
+        private GameObject _surfaceHost;
+        private SurfaceTopology _topology;
+        private SurfaceGrid _grid;
 
         [SetUp]
         public void SetUp()
         {
-            _projectorHost = new GameObject(nameof(HexTileStoreTests));
-            _projector = _projectorHost.AddComponent<MeshProjector>();
-            _projector.Size = new Vector3(10f, 10f, 10f);
+            _surfaceHost = new GameObject(nameof(HexTileStoreTests));
+            _topology = SurfaceTopologyBuilder.Build(
+                new SurfaceHandle(51),
+                new[]
+                {
+                    new Vector3(-10f, -10f, 0f), new Vector3(10f, -10f, 0f),
+                    new Vector3(-10f, 10f, 0f), new Vector3(10f, 10f, 0f)
+                },
+                new[] { 0, 1, 2, 2, 1, 3 });
+            SurfacePoint seed = new(_topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
+            _grid = SurfaceGridBuilder.Build(_topology, seed, 0.5f, 1, SurfacePatchBuildSettings.Unlimited);
         }
 
         [TearDown]
-        public void TearDown()
-        {
-            Object.DestroyImmediate(_projectorHost);
-        }
+        public void TearDown() => Object.DestroyImmediate(_surfaceHost);
 
         [Test]
-        public void Rebuild_ForLimitOne_CreatesSevenUniqueTilesAndPopulatesLookup()
+        public void Bake_GridRadiusOne_CreatesSevenUniqueTilesAndPopulatesLookup()
         {
-            List<global::Jeomseon.Unity.GridTileSystem.HexTile> tiles = new();
-            HexTileStore store = new(tiles);
-
-            store.Bake(_projector, 0.1f, 1, ~0);
-
+            List<HexTile> tiles = new();
+            HexTileStore store = CreateStore(tiles);
             Assert.That(tiles, Has.Count.EqualTo(7));
             Assert.That(store.TryGetTile(new HexCoordinates(0, 0), out _), Is.True);
             Assert.That(store.TryGetTile(new HexCoordinates(5, 5), out _), Is.False);
         }
 
         [Test]
-        public void Rebuild_CalledTwice_ReplacesTilesInPlaceRatherThanDuplicating()
+        public void Bake_CalledTwice_ReplacesTilesAndPreservesUserState()
         {
-            List<global::Jeomseon.Unity.GridTileSystem.HexTile> tiles = new();
-            HexTileStore store = new(tiles);
-
-            store.Bake(_projector, 0.1f, 1, ~0);
-            store.TryGetTile(new HexCoordinates(0, 0), out global::Jeomseon.Unity.GridTileSystem.HexTile first);
+            List<HexTile> tiles = new();
+            HexTileStore store = CreateStore(tiles);
+            store.TryGetTile(new HexCoordinates(0, 0), out HexTile first);
             first.AddProperty("marker");
+            store.Bake(_topology, _grid, _surfaceHost.transform, 1);
 
-            store.Bake(_projector, 0.1f, 1, ~0);
-
+            store.TryGetTile(new HexCoordinates(0, 0), out HexTile second);
             Assert.That(tiles, Has.Count.EqualTo(7));
-            store.TryGetTile(new HexCoordinates(0, 0), out global::Jeomseon.Unity.GridTileSystem.HexTile second);
             Assert.That(second, Is.Not.SameAs(first));
             Assert.That(second.Properties, Does.Contain("marker"));
         }
@@ -60,88 +60,60 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
         [Test]
         public void SetActive_ForKnownCoordinates_UpdatesTileIsActive()
         {
-            List<global::Jeomseon.Unity.GridTileSystem.HexTile> tiles = new();
-            HexTileStore store = new(tiles);
-            store.Bake(_projector, 0.1f, 1, ~0);
-
+            List<HexTile> tiles = new();
+            HexTileStore store = CreateStore(tiles);
             store.SetActive(new AxialCoordinates(0, 0), false);
-
-            store.TryGetTile(new HexCoordinates(0, 0), out global::Jeomseon.Unity.GridTileSystem.HexTile hex);
-            Assert.That(hex.IsActive, Is.False);
+            store.TryGetTile(new HexCoordinates(0, 0), out HexTile tile);
+            Assert.That(tile.IsActive, Is.False);
         }
 
         [Test]
         public void SetActive_ForUnknownCoordinates_DoesNothing()
         {
-            List<global::Jeomseon.Unity.GridTileSystem.HexTile> tiles = new();
-            HexTileStore store = new(tiles);
-
+            HexTileStore store = new(new List<HexTile>());
             Assert.DoesNotThrow(() => store.SetActive(new AxialCoordinates(99, 99), false));
         }
 
         [Test]
-        public void TileVisualsChanged_FiresOnRebuildAndOnSubsequentActiveOrColorChange()
+        public void TileVisualsChanged_FiresOnBakeAndVisualStateChanges()
         {
-            List<global::Jeomseon.Unity.GridTileSystem.HexTile> tiles = new();
+            List<HexTile> tiles = new();
             HexTileStore store = new(tiles);
             int fireCount = 0;
             store.TileVisualsChanged += () => fireCount++;
-
-            store.Bake(_projector, 0.1f, 1, ~0);
+            store.Bake(_topology, _grid, _surfaceHost.transform, 1);
             Assert.That(fireCount, Is.EqualTo(1));
-
-            store.TryGetTile(new HexCoordinates(0, 0), out global::Jeomseon.Unity.GridTileSystem.HexTile hex);
-            hex.IsActive = false;
-            Assert.That(fireCount, Is.EqualTo(2));
-
-            hex.Color = Color.red;
+            tiles[0].IsActive = false;
+            tiles[0].Color = Color.red;
             Assert.That(fireCount, Is.EqualTo(3));
         }
 
         [Test]
-        public void RebuildLookup_AfterManualListConstruction_PopulatesLookupFromExistingTiles()
+        public void RebuildLookup_ManualList_PopulatesCoordinates()
         {
-            List<global::Jeomseon.Unity.GridTileSystem.HexTile> tiles = new()
-            {
-                new(0, 0),
-                new(1, 0)
-            };
-            HexTileStore store = new(tiles);
-
+            HexTileStore store = new(new List<HexTile> { new(0, 0), new(1, 0) });
             store.RebuildLookup();
-
             Assert.That(store.TryGetTile(new HexCoordinates(0, 0), out _), Is.True);
             Assert.That(store.TryGetTile(new HexCoordinates(1, 0), out _), Is.True);
         }
 
         [Test]
-        public void Clear_AfterBake_ThenBakeAgain_RebuildsTilesAndLookup()
+        public void Bake_SurfaceTransform_TransformsDisplayPositionToWorld()
         {
-            List<global::Jeomseon.Unity.GridTileSystem.HexTile> tiles = new();
-            HexTileStore store = new(tiles);
-
-            store.Bake(_projector, 0.1f, 1, ~0);
-            store.Clear();
-            store.Bake(_projector, 0.1f, 1, ~0);
-
-            Assert.That(tiles, Has.Count.EqualTo(7));
-            Assert.That(store.TryGetTile(new HexCoordinates(0, 0), out _), Is.True);
+            List<HexTile> identityTiles = new();
+            CreateStore(identityTiles);
+            Vector3 identityPosition = identityTiles[0].TilePosition;
+            _surfaceHost.transform.position = new Vector3(0f, 4f, 0f);
+            List<HexTile> translatedTiles = new();
+            CreateStore(translatedTiles);
+            Assert.That(translatedTiles[0].TilePosition, Is.EqualTo(identityPosition + Vector3.up * 4f));
         }
 
-        [Test]
-        public void Bake_WithColliderSurface_SnapsTilePositionsToSurface()
+        private HexTileStore CreateStore(List<HexTile> tiles)
         {
-            _projectorHost.transform.SetPositionAndRotation(new Vector3(0f, 4f, 0f), Quaternion.Euler(90f, 0f, 0f));
-            GameObject surface = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            surface.layer = 3;
-            Physics.SyncTransforms();
-            List<HexTile> tiles = new();
             HexTileStore store = new(tiles);
-
-            store.Bake(_projector, 0.1f, 1, 1 << 3);
-
-            Assert.That(tiles[0].TilePosition.y, Is.EqualTo(0f).Within(0.001f));
-            Object.DestroyImmediate(surface);
+            store.Bake(_topology, _grid, _surfaceHost.transform, 1);
+            return store;
         }
     }
 }

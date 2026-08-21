@@ -15,6 +15,14 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
         }
 
         [Test]
+        public void Constructor_RejectsCubeCoordinateOutsideIntegerRange()
+        {
+            Assert.That(
+                () => new HexCoordinates(int.MaxValue, int.MaxValue),
+                Throws.TypeOf<System.OverflowException>());
+        }
+
+        [Test]
         public void Vector3Conversion_UsesAllCubeCoordinates()
         {
             Vector3 converted = new HexCoordinates(2, -5);
@@ -34,6 +42,17 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             HexCoordinates result = HexCoordinates.Round(new Vector2(2f, -5f));
 
             Assert.That(result, Is.EqualTo(new HexCoordinates(2, -5)));
+        }
+
+        [Test]
+        public void Round_RejectsNonFiniteCoordinates()
+        {
+            Assert.That(
+                () => HexCoordinates.Round(new Vector2(float.NaN, 0f)),
+                Throws.ArgumentException);
+            Assert.That(
+                () => HexCoordinates.Round(new Vector2(float.PositiveInfinity, 0f)),
+                Throws.ArgumentException);
         }
 
         [Test]

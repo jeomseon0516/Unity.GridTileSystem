@@ -1,45 +1,56 @@
 # Jeomseon Unity Grid Tile System
 
-육각형 좌표, 타일 데이터와 상호작용, 표면 투영 기반 Grid 시각화를 제공하는 Unity 패키지입니다.
+> 다음 릴리스의 intrinsic Surface Grid 구조는 기존 Projector 기반 Scene과 호환되지 않습니다. 새
+> `HexGridController` 구성으로 다시 Bake해야 합니다.
+
+Triangle topology와 intrinsic Surface Space 위에 육각 Grid를 생성하는 Unity 패키지입니다. Grid를
+월드 XZ 또는 Projector 평면에서 투영하지 않으므로 벽, 접힌 Mesh와 곡면을 topology를 따라 다룹니다.
 
 ## 요구 사항
 
 - Unity 6000.5.7f1 이상
-- `com.jeomseon.unity.projector`와 `com.jeomseon.unity.shaders`(자동 설치)
-- OpenUPM Scoped Registry에 `com.jeomseon.unity` 스코프 등록
+- Runtime topology 생성에 Read/Write Enabled인 Static Mesh
+- 원본 Mesh와 같은 Mesh를 사용하는 MeshCollider(picking을 사용할 경우)
+- OpenUPM Scoped Registry의 `com.jeomseon.unity` 스코프
+
+Projector, URP, HDRP 또는 별도 Shader 패키지에 의존하지 않습니다.
 
 ## 설치
 
-Unity Package Manager에서 이름으로 다음 패키지를 추가합니다.
+Unity Package Manager에서 `com.jeomseon.unity.grid-tile-system`을 추가합니다.
+
+## 기본 구성
+
+1. `HexGridSettings` asset을 생성합니다.
+2. Surface용 `MeshFilter`와 동일 Mesh의 `MeshCollider`를 준비합니다.
+3. 시각화가 필요하면 Grid 출력 전용 GameObject에 별도 `MeshFilter`와 `MeshRenderer`를 둡니다.
+4. Controller에 source 참조와 Settings를 연결하고, 시각화할 때만 output 참조 두 개를 함께 연결합니다.
+5. Seed Triangle index와 barycentric 좌표를 지정하고 `Rebuild Tiles`를 실행합니다.
+
+Output 두 참조를 모두 비우면 논리 타일·피킹·상태만 사용하는 logical-only Grid로 동작합니다. 출력할
+때는 Source와 output MeshFilter가 달라야 하며 Controller가 원본 Geometry 덮어쓰기를 검증합니다.
+
+`HexTileData`는 좌표·속성·색상·활성 상태만 담고, `HexTile`은 이 데이터에 UnityEvent 상호작용을
+결합합니다. 저장이나 네트워크 변환은 `HexTile.Data`를 기준으로 하고, 데이터를 직접 수정한 뒤에는
+필요한 시점에 `HexGridController.RefreshRendering()`을 호출합니다.
 
 ```text
-com.jeomseon.unity.grid-tile-system
+Static Mesh Adapter → Triangle topology → Triangle Unfolding local Patch
+→ intrinsic Hex → Triangle/Hex clipping → barycentric Surface Region
+→ pipeline-independent Geometry snapshot → Mesh Render Backend
 ```
 
-OpenUPM 게시 전에는 Git URL로 설치할 수 있습니다.
-
-```text
-https://github.com/jeomseon0516/Unity.GridTileSystem.git#v0.1.0
-```
-
-## 기본 사용
-
-1. Package Manager에서 `Basic Usage` Sample을 Import합니다.
-2. `HexGridBasicUsage` Scene을 엽니다. 별도 Auto Fix 없이 Projector, Effect와 표면 Material이 연결됩니다.
-3. 직접 구성할 때는 같은 GameObject에 `MeshProjector`와 `HexGridController`를 추가하고
-   `HexGridSettings`와 `HexGridProjectorEffect`를 연결합니다.
-
-`MeshProjector`는 내부 Material을 외부에 노출하지 않으며 `MeshRenderer`, `SkinnedMeshRenderer`,
-`Terrain` 표면을 receiver로 처리합니다. 상호작용 대상에는 Collider가 필요합니다.
-
-## Unity 기본 기능과의 비교
-
-Unity의 2D Hexagonal Tilemap이 요구 사항을 충족한다면 기본 기능을 우선 검토할 수 있습니다. 이 패키지는 3D 표면 투영, 물리 레이캐스트와 타일별 런타임 상태를 함께 다루는 용도입니다.
+색상과 활성 상태는 vertex color/alpha로 전달됩니다. Material이 vertex color를 어떻게 표현할지는
+Material 또는 향후 파이프라인별 Backend가 결정합니다.
 
 ## 현재 제한 사항
 
-- Terrain은 기본 129 해상도의 생성 메시를 사용하며 Projector에서 조절할 수 있습니다.
-- 입력은 Unity Input System의 마우스 장치를 사용합니다.
-- 큰 그리드의 부분 갱신 및 Burst/Jobs 최적화는 아직 제공하지 않습니다.
+- Runtime Adapter는 readable Static Mesh부터 지원합니다.
+- Terrain virtual topology와 Skinned Mesh binding은 후속 단계입니다.
+- 곡률이 있는 큰 영역은 여러 local Patch와 seam이 필요합니다.
+- shared-boundary 통합, Chunk, Burst/Jobs 최적화는 아직 제공하지 않습니다.
+- 입력은 Unity Input System과 MeshCollider raycast를 사용합니다.
+
+수학 학습 순서는 Harness의 `architecture/intrinsic-surface-grid-study-guide.md`에 정리돼 있습니다.
 
 영문 문서는 [README.en.md](README.en.md)를 참고하세요.

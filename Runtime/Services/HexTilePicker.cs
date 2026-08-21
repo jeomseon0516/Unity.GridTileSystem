@@ -1,51 +1,38 @@
-using Jeomseon.Unity.Projector;
+using Jeomseon.Unity.GridTileSystem.Surface.Core;
+using Jeomseon.Unity.GridTileSystem.Surface.Grid;
 using UnityEngine;
 
 namespace Jeomseon.Unity.GridTileSystem.Services
 {
     public sealed class HexTilePicker : IHexTilePicker
     {
-        private const float SquareRootThree = 1.732051f;
-        private const float SquareRootThreeDivideThree = SquareRootThree / 3;
-        private const float TwoFDivideThree = 2f / 3;
-        private const float NegativeOneFDivideThree = -1f / 3;
-
-        private readonly MeshProjector _projector;
+        /// <summary>Physics hit을 intrinsic Logical Tile로 변환하는 저수준 picker입니다.</summary>
+        private readonly SurfaceGridPicker _surfacePicker;
+        /// <summary>Logical 좌표에 대응하는 사용자 Tile 상태 저장소입니다.</summary>
         private readonly IHexTileStore _tileData;
 
-        public HexTilePicker(MeshProjector projector, IHexTileStore tileData)
+        /// <summary>Surface identity picker와 사용자 Tile 저장소를 결합합니다.</summary>
+        public HexTilePicker(
+            Collider surfaceCollider,
+            SurfaceTopology topology,
+            SurfaceGrid grid,
+            IHexTileStore tileData)
         {
-            _projector = projector;
+            _surfacePicker = new SurfaceGridPicker(surfaceCollider, topology, grid);
             _tileData = tileData;
         }
 
-        public bool TryPick(in Ray ray, LayerMask layerMask, float tileRadius, out (bool, RaycastHit) hitTuple, out HexTile tile)
+        /// <summary>Ray가 활성 Logical Tile과 교차하면 사용자 Tile 상태를 반환합니다.</summary>
+        public bool TryPick(in Ray ray, LayerMask layerMask, out (bool, RaycastHit) hitTuple, out HexTile tile)
         {
             tile = null;
-            hitTuple.Item1 = false;
-
-            if (Physics.Raycast(ray, out hitTuple.Item2, Mathf.Infinity, layerMask))
+            bool found = _surfacePicker.TryPick(ray, layerMask, out RaycastHit hit, out SurfaceGridTileRegion region);
+            hitTuple = (hit.collider != null, hit);
+            if (found && _tileData.TryGetTile(region.Coordinates, out HexTile foundTile))
             {
-                hitTuple.Item1 = true;
-
-                Vector3 localPosition = _projector.transform.InverseTransformPoint(hitTuple.Item2.point);
-                Vector2 convertedPosition = new(
-                    localPosition.x / _projector.Size.x,
-                    localPosition.y / _projector.Size.y);
-
-                Vector2 axialCoordinates = new(
-                    TwoFDivideThree * convertedPosition.x / tileRadius,
-                    (NegativeOneFDivideThree * convertedPosition.x + SquareRootThreeDivideThree * convertedPosition.y) / tileRadius);
-
-                HexCoordinates hexCoordinates = HexCoordinates.Round(axialCoordinates);
-
-                if (_tileData.TryGetTile(hexCoordinates, out HexTile hex))
-                {
-                    tile = hex;
-                    return hex.IsActive;
-                }
+                tile = foundTile;
+                return foundTile.IsActive;
             }
-
             return false;
         }
     }

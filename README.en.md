@@ -1,27 +1,37 @@
 # Jeomseon Unity Grid Tile System
 
-A Unity package for hex coordinates, tile data and interaction, and surface-projected grid visualization.
+> The upcoming intrinsic Surface Grid architecture is incompatible with scenes authored with the
+> projector workflow. Configure and bake them again with the new `HexGridController`.
+
+A Unity package that builds hex grids in intrinsic Surface Space derived from triangle topology. It
+does not project a world-XZ or projector plane onto geometry, so folded meshes, walls, and curved
+surfaces can be traversed through topology.
 
 ## Requirements
 
 - Unity 6000.5.7f1 or newer
-- `com.jeomseon.unity.projector` and `com.jeomseon.unity.shaders` (installed as dependencies)
-- The `com.jeomseon.unity` scope configured for the OpenUPM registry
+- A Read/Write Enabled static Mesh for runtime topology construction
+- A MeshCollider using the same source Mesh when picking is required
+- The `com.jeomseon.unity` OpenUPM scope
 
-## Install
+The package has no Projector, URP, HDRP, or external shader-package dependency.
 
-Add `com.jeomseon.unity.grid-tile-system` by name in Unity Package Manager. Before the OpenUPM release is available, use:
+## Setup
+
+1. Create a `HexGridSettings` asset.
+2. Prepare a source `MeshFilter` and a `MeshCollider` using the same Mesh.
+3. If visualization is required, create a separate output object with `MeshFilter` and `MeshRenderer`.
+4. Assign the source and settings; assign both output references only when visualization is needed.
+5. Choose a seed triangle and barycentric point, then run `Rebuild Tiles`.
 
 ```text
-https://github.com/jeomseon0516/Unity.GridTileSystem.git#v0.1.0
+Static Mesh Adapter → Triangle topology → local unfolding patch → intrinsic hexes
+→ polygon clipping → barycentric regions → geometry snapshot → mesh render backend
 ```
 
-## Basic Usage
+Current runtime support starts with static readable meshes. Terrain virtual topology, skinned binding,
+shared-boundary chunking, and Burst/Jobs optimization remain planned.
 
-Import the `Basic Usage` Sample and open `HexGridBasicUsage`. The Scene already connects the
-`MeshProjector`, `HexGridProjectorEffect`, surface Material, and settings without an Auto Fix step.
-For a custom Scene, add `MeshProjector` and `HexGridController` to the same GameObject and assign the
-settings and effect. `MeshProjector` supports `MeshRenderer`, `SkinnedMeshRenderer`, and `Terrain`
-receivers without exposing its internal Material. Receiver surfaces need Colliders for interaction.
-
-Unity's built-in 2D Hexagonal Tilemap may be a better fit for conventional 2D tile games. This package targets projected 3D surfaces, physics raycasts, and per-tile runtime state.
+Leaving both output references empty enables a logical-only grid with tile state and picking but no generated
+render mesh. `HexTileData` owns serializable state, while `HexTile` adds UnityEvent interaction. Call
+`HexGridController.RefreshRendering()` after directly applying synchronized data.

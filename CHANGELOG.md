@@ -4,14 +4,34 @@
 
 ## [Unreleased]
 
-- **(Breaking)** URP `DecalProjector`와 사용자 변경 가능한 Grid Material을 제거하고, 내부 Material을
-  소유하는 `Jeomseon.Unity.Projector.MeshProjector` + 검증된 `ProjectorEffect` 구성으로 교체했습니다.
-- Grid 렌더링 수학을 `Jeomseon.Unity.Shaders`의 `HexagonShapeCore.hlsl`과 `HexGridCore.hlsl`로
-  분리했습니다. GridTileSystem은 타일 상태 버퍼와 Projector 통합만 담당합니다.
-- 가장 바깥쪽 타일은 중심 좌표가 Grid 안에 있으면 경계 밖 픽셀도 인접 타일의 단일 도형 외곽선으로
-  복원해 선 굵기와 안티앨리어싱을 포함한 전체 외곽선을 렌더링합니다.
-- Basic Usage Scene은 특정 Render Pipeline, URP Asset, Decal Feature나 Auto Fix 없이 가져오는 즉시
-  구성되며 파이프라인 비종속 표면 Shader를 사용합니다.
+- **(Breaking)** Projector/Shader 패키지 의존, Effect, Projection Shader와 Buffer Uploader를 완전히
+  제거하고 Triangle topology 기반 intrinsic Surface Grid로 교체했습니다.
+- compact adjacency, topology 진단, Triangle Unfolding local Patch, convex clipping, barycentric binding,
+  실제 길이 기반 Hex layout과 Surface picking을 추가했습니다.
+- Non-manifold Edge와 degenerate Triangle을 traversal 경계로 차단해 잘못된 Face 연결과 자기 인접을
+  방지했습니다. NaN/Infinity position, concave polygon과 zero-length clip Edge는 입력 경계에서 거부합니다.
+- Patch intrinsic radius를 임의의 seed Triangle A corner가 아니라 실제 Surface seed에서 측정합니다.
+- 불변 snapshot의 `IReadOnlyList`가 내부 배열로 다시 cast될 수 있던 경로를 read-only view로
+  봉인해 topology, Patch, Region, Grid와 Geometry를 외부에서 변경할 수 없게 했습니다.
+- Hex origin/query 좌표의 NaN/Infinity와 Geometry 변환 행렬의 비유한 값·비가역 변환을 입력
+  경계에서 거부합니다. Surface snapshot 혼용과 음수·비유한 offset도 즉시 오류로 처리합니다.
+- Picking은 전역 Physics hit가 아니라 구성된 원본 Collider를 직접 raycast하므로 앞쪽의 무관한
+  Collider가 Surface 선택을 가로막지 않습니다.
+- `SurfaceHandle`을 64-bit identity로 확장하고 Static Mesh Adapter가 `EntityId.ToULong()`을
+  사용하게 해 서로 다른 Mesh가 32-bit hash 충돌로 같은 Surface로 취급될 가능성을 제거했습니다.
+- Unity 6000.5.7f1 EditMode Test Runner에서 구조 전환 이후 전체 117/117 테스트가 통과했습니다.
+- Basic Usage의 seed를 Unity Plane 모서리 Triangle 0에서 중앙 Triangle 100으로 옮기고 Tile Radius를
+  0.38로 조정해 전체 127개 Grid가 중앙에 표시되도록 수정했습니다.
+- `ClearTiles()`가 Store의 빈 visual 이벤트를 기존 Geometry Backend에 먼저 적용해
+  `Visual list does not cover every geometry tile index` 예외를 내던 순서 결함을 수정했습니다.
+  Unity 6000.5.7f1 EditMode Test Runner 최종 결과는 회귀 테스트를 포함해 118/118입니다.
+- `ISurfaceGridRenderBackend`와 공통 Mesh API 기반 `MeshSurfaceGridRenderBackend`를 추가했습니다.
+- **(Breaking)** `HexTileData`를 도입해 좌표·속성·색상·활성 상태를 UnityEvent 상호작용 façade인
+  `HexTile`에서 분리했습니다. 기존 직렬화 타일은 다시 Bake해야 합니다.
+- Output MeshFilter/MeshRenderer를 둘 다 비우면 렌더링 Backend 없이 논리 타일·피킹·상태만
+  Bake할 수 있습니다. 하나만 지정한 구성은 오류로 처리합니다.
+- `HexGridController`는 readable source MeshFilter, 동일 Mesh의 MeshCollider와 별도 output
+  MeshFilter/MeshRenderer를 사용합니다.
 - Unity 직렬화가 `tiles` List 인스턴스를 교체해도 Store가 이전 List를 계속 사용하지 않도록 서비스
   참조 변경 감지와 대칭 해제를 추가했습니다.
 
@@ -36,7 +56,8 @@
   할당하세요.
 - `HexGridController`의 입력·Raycast·타일 데이터·선택 상태·GPU 갱신 책임을 `Runtime/Services/`의 5개
   독립 서비스(`HexGridPointerInput`/`HexTilePicker`/`HexTileStore`/
-  `HexTileSelectionState`/`HexTileBufferUploader`)로 분리했습니다(P1-01).
+  `HexTileSelectionState`)로 분리했습니다(P1-01). Projector 전용 `HexTileBufferUploader`는 이후
+  intrinsic Backend 전환에서 제거했습니다.
 - `OnEnterTile`/`OnExitTile`/`OnMouseDownTile`/`OnMouseUpTile`이 매 이벤트마다 리스너를 2회씩
   호출하던 버그를 수정했습니다.
 - Runtime 스크립트로 `TileRadius`를 바꿔도 투영 값이 갱신되도록 설정 asset의 `SettingsChanged`
