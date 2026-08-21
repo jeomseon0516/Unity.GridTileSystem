@@ -37,12 +37,25 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             tile = null;
             int surfaceLayerBit = 1 << _surfaceCollider.gameObject.layer;
             if ((layerMask.value & surfaceLayerBit) == 0 ||
-                !_surfaceCollider.Raycast(ray, out hit, Mathf.Infinity) || hit.triangleIndex < 0)
+                !_surfaceCollider.Raycast(ray, out hit, Mathf.Infinity))
                 return false;
 
-            // MeshCollider hit는 원본 Triangle index와 barycentricCoordinate를 직접 제공합니다.
-            // 따라서 world position을 평면에 재투영하지 않고 정확한 Surface identity를 복원할 수 있습니다.
-            SurfacePoint point = new(_topology.Handle, hit.triangleIndex, hit.barycentricCoordinate);
+            SurfacePoint point;
+            Vector3 localHit = _surfaceCollider.transform.InverseTransformPoint(hit.point);
+            if (_topology.TryGetSurfacePoint(localHit, out point))
+            {
+                // Terrain 등 계산형 topology는 Collider의 내부 Triangle index 계약에 의존하지 않고
+                // local hit 위치를 규칙적 topology identity로 직접 복원합니다.
+            }
+            else if (hit.triangleIndex >= 0)
+            {
+                // MeshCollider는 원본 Triangle index와 barycentricCoordinate를 직접 제공합니다.
+                point = new SurfacePoint(_topology.Handle, hit.triangleIndex, hit.barycentricCoordinate);
+            }
+            else
+            {
+                return false;
+            }
             if (!SurfacePatchMapper.TryGetIntrinsicPosition(_grid.Patch, point, out Vector2 intrinsic)) return false;
             HexCoordinates coordinates = _grid.Layout.GetCoordinates(intrinsic);
             return _grid.TryGetTile(coordinates, out tile);

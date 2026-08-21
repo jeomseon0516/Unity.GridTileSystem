@@ -8,7 +8,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
     /// 하나의 Triangle Surface를 나타내는 불변 snapshot입니다. 원본 위치, 방향성 Face,
     /// Face 인접 정보, 연결 성분과 구축 진단을 포함합니다.
     /// </summary>
-    public sealed class SurfaceTopology
+    public class SurfaceTopology
     {
         /// <summary><see cref="SurfaceTriangle"/>이 index로 참조하는 원본 local vertex 위치입니다.</summary>
         private readonly Vector3[] _positions;
@@ -34,17 +34,35 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
         /// <summary>이 topology의 모든 <see cref="SurfacePoint"/>가 공유하는 논리적 identity를 가져옵니다.</summary>
         public SurfaceHandle Handle { get; }
         /// <summary>원본 local position을 가져옵니다.</summary>
-        public IReadOnlyList<Vector3> Positions => _positionsView;
+        public virtual IReadOnlyList<Vector3> Positions => _positionsView;
         /// <summary>방향성 Triangle을 가져옵니다.</summary>
-        public IReadOnlyList<SurfaceTriangle> Triangles => _trianglesView;
+        public virtual IReadOnlyList<SurfaceTriangle> Triangles => _trianglesView;
         /// <summary>Triangle 인접 정보 레코드를 가져옵니다.</summary>
-        public IReadOnlyList<SurfaceTriangleAdjacency> Adjacency => _adjacencyView;
+        public virtual IReadOnlyList<SurfaceTriangleAdjacency> Adjacency => _adjacencyView;
         /// <summary>Traversal 전에 소비자가 검사해야 하는 결함을 가져옵니다.</summary>
-        public IReadOnlyList<SurfaceTopologyDiagnostic> Diagnostics => _diagnosticsView;
+        public virtual IReadOnlyList<SurfaceTopologyDiagnostic> Diagnostics => _diagnosticsView;
         /// <summary>모든 Triangle의 연결 성분 식별자를 가져옵니다.</summary>
-        public IReadOnlyList<int> ComponentIds => _componentIdsView;
+        public virtual IReadOnlyList<int> ComponentIds => _componentIdsView;
         /// <summary>서로 분리된 Triangle 연결 성분의 개수를 가져옵니다.</summary>
-        public int ComponentCount { get; }
+        public virtual int ComponentCount { get; }
+
+        /// <summary>계산형 topology가 배열 복사 없이 Surface identity만 초기화합니다.</summary>
+        protected SurfaceTopology(SurfaceHandle handle)
+        {
+            if (!handle.IsValid) throw new ArgumentException("A valid surface handle is required.", nameof(handle));
+            Handle = handle;
+            _positions = Array.Empty<Vector3>();
+            _triangles = Array.Empty<SurfaceTriangle>();
+            _adjacency = Array.Empty<SurfaceTriangleAdjacency>();
+            _diagnostics = Array.Empty<SurfaceTopologyDiagnostic>();
+            _componentIds = Array.Empty<int>();
+            _positionsView = Array.AsReadOnly(_positions);
+            _trianglesView = Array.AsReadOnly(_triangles);
+            _adjacencyView = Array.AsReadOnly(_adjacency);
+            _diagnosticsView = Array.AsReadOnly(_diagnostics);
+            _componentIdsView = Array.AsReadOnly(_componentIds);
+            ComponentCount = 0;
+        }
 
         /// <summary>Builder가 소유한 배열로 검증된 topology snapshot을 생성합니다.</summary>
         internal SurfaceTopology(
@@ -74,7 +92,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
         /// intrinsic point를 p = uA + vB + wC로 원본 local 3D 좌표에 평가합니다.
         /// 여기서 (u,v,w)는 각 Triangle vertex에 대응하는 barycentric 가중치입니다.
         /// </summary>
-        public Vector3 Evaluate(in SurfacePoint point)
+        public virtual Vector3 Evaluate(in SurfacePoint point)
         {
             if (!point.IsValid)
                 throw new ArgumentException("Surface point has invalid barycentric coordinates.", nameof(point));
@@ -87,6 +105,17 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             return _positions[triangle.A] * point.Barycentric.x +
                    _positions[triangle.B] * point.Barycentric.y +
                    _positions[triangle.C] * point.Barycentric.z;
+        }
+
+        /// <summary>지정한 Triangle을 parameterization과 Region 생성에 사용할 수 있는지 반환합니다.</summary>
+        public virtual bool IsTriangleTraversable(int triangleIndex) =>
+            (uint)triangleIndex < (uint)Triangles.Count;
+
+        /// <summary>Surface local 위치를 topology identity와 barycentric 좌표로 변환할 수 있으면 반환합니다.</summary>
+        public virtual bool TryGetSurfacePoint(in Vector3 localPosition, out SurfacePoint point)
+        {
+            point = default;
+            return false;
         }
     }
 }

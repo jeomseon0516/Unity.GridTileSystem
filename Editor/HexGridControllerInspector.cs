@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -11,8 +12,8 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
     internal sealed class HexGridControllerInspector : Editor
     {
         private HexGridController _controller;
-        private SerializedProperty _tilesProperty;
         private SerializedProperty _settingsProperty;
+        private SerializedProperty _receiversProperty;
         private HexTileOptionOverlay _tileOptionOverlay;
         private Editor _settingsEditor;
         private GUIStyle _labelStyle;
@@ -22,8 +23,8 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
         private void OnEnable()
         {
             _controller = (HexGridController)target;
-            _tilesProperty = serializedObject.FindProperty("tiles");
             _settingsProperty = serializedObject.FindProperty("settings");
+            _receiversProperty = serializedObject.FindProperty("receivers");
             _tileOptionOverlay = new HexTileOptionOverlay();
             EditorApplication.delayCall += AddOverlay;
         }
@@ -41,7 +42,7 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            EditorGUILayout.LabelField("Baked Tile Count", _tilesProperty.arraySize.ToString());
+            EditorGUILayout.LabelField("Baked Tile Count", _controller.TileCount.ToString());
             DrawDefaultInspector();
             serializedObject.ApplyModifiedProperties();
             DrawInlineSettings();
@@ -50,7 +51,7 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
             if (!isConfigured)
             {
                 EditorGUILayout.HelpBox(
-                    "Assign Settings and a readable source Mesh/MeshCollider. Output Mesh components are optional, but must be assigned as a pair.",
+                    "Assign Settings and at least one Receiver with a readable source Mesh/MeshCollider. Each Receiver's output components are optional, but must be assigned as a pair.",
                     MessageType.Error);
             }
             else
@@ -65,7 +66,7 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
                 if (GUILayout.Button("Rebuild Tiles")) RebuildTiles();
             }
 
-            using (new EditorGUI.DisabledScope(_tilesProperty.arraySize == 0))
+            using (new EditorGUI.DisabledScope(_controller.TileCount == 0))
             {
                 if (GUILayout.Button("Clear Baked Tiles") &&
                     EditorUtility.DisplayDialog(
@@ -135,18 +136,16 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
 
         private bool IsConfigured()
         {
-            SerializedProperty sourceProperty = serializedObject.FindProperty("sourceMeshFilter");
-            SerializedProperty colliderProperty = serializedObject.FindProperty("surfaceCollider");
-            SerializedProperty outputFilterProperty = serializedObject.FindProperty("outputMeshFilter");
-            SerializedProperty outputRendererProperty = serializedObject.FindProperty("outputMeshRenderer");
-            MeshFilter source = sourceProperty.objectReferenceValue as MeshFilter;
-            MeshCollider surface = colliderProperty.objectReferenceValue as MeshCollider;
-            MeshFilter output = outputFilterProperty.objectReferenceValue as MeshFilter;
-            bool hasOutputFilter = output != null;
-            bool hasOutputRenderer = outputRendererProperty.objectReferenceValue != null;
-            bool validOutput = hasOutputFilter == hasOutputRenderer && (!hasOutputFilter || !ReferenceEquals(source, output));
-            return _settingsProperty.objectReferenceValue != null && source != null && source.sharedMesh != null &&
-                   surface != null && surface.sharedMesh == source.sharedMesh && validOutput;
+            if (_settingsProperty.objectReferenceValue == null || _controller.Receivers.Count == 0) return false;
+            foreach (HexGridReceiver receiver in _controller.Receivers)
+            {
+                if (receiver == null || receiver.SurfaceCollider == null) continue;
+                if (receiver.SurfaceKind == SurfaceReceiverKind.StaticMesh &&
+                    receiver.SourceMeshFilter != null && receiver.SourceMeshFilter.sharedMesh != null) return true;
+                if (receiver.SurfaceKind == SurfaceReceiverKind.Terrain &&
+                    receiver.SourceTerrain != null && receiver.SourceTerrain.terrainData != null) return true;
+            }
+            return false;
         }
 
         private void AddOverlay()
@@ -165,10 +164,8 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
                 _controller.TryPickTile(
                     HandleUtility.GUIPointToWorldRay(currentEvent.mousePosition), out _, out IHexTile pickedTile))
             {
-                int index = FindTileIndex(pickedTile);
-                if (index >= 0 && index < _tilesProperty.arraySize)
+                if (TryFindTileProperty(pickedTile, out SerializedProperty tileProperty))
                 {
-                    SerializedProperty tileProperty = _tilesProperty.GetArrayElementAtIndex(index);
                     tileProperty.isExpanded = true;
                     _selectedTile = (HexTile)pickedTile;
                     _tileOptionOverlay.ShowProperty(tileProperty);
@@ -193,14 +190,22 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
             }
         }
 
-        private int FindTileIndex(IHexTile tile)
+        private bool TryFindTileProperty(IHexTile tile, out SerializedProperty tileProperty)
         {
-            for (int i = 0; i < _controller.Tiles.Count; i++)
+            for (int receiverIndex = 0; receiverIndex < _controller.Receivers.Count; receiverIndex++)
             {
-                if (ReferenceEquals(_controller.Tiles[i], tile)) return i;
+                IReadOnlyList<HexTile> tiles = _controller.Receivers[receiverIndex]?.Tiles;
+                if (tiles == null) continue;
+                for (int tileIndex = 0; tileIndex < tiles.Count; tileIndex++)
+                {
+                    if (!ReferenceEquals(tiles[tileIndex], tile)) continue;
+                    SerializedProperty receiverProperty = _receiversProperty.GetArrayElementAtIndex(receiverIndex);
+                    tileProperty = receiverProperty.FindPropertyRelative("tiles").GetArrayElementAtIndex(tileIndex);
+                    return true;
+                }
             }
-
-            return -1;
+            tileProperty = null;
+            return false;
         }
     }
 }

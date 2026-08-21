@@ -21,6 +21,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
 
             Assert.That(region.Vertices.Count, Is.EqualTo(6));
             Assert.That(region.TriangleIndices.Count, Is.EqualTo(12));
+            Assert.That(region.IntrinsicArea, Is.EqualTo(3f * Mathf.Sqrt(3f) * 0.125f).Within(0.00001f));
             foreach (SurfaceRegionVertex vertex in region.Vertices)
             {
                 Assert.That(vertex.SurfacePoint.IsValid, Is.True);

@@ -12,6 +12,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef67a294c31b4c839204ef8b8c2b7542, type: 3}
   m_Name: HexGridSettings
   m_EditorClassIdentifier: Jeomseon.Unity.GridTileSystem::Jeomseon.Unity.GridTileSystem.HexGridSettings
-  tileRadius: 0.38
-  gridRadius: 6
+  tileRadius: 0.5
   interactionLayerMask: 8

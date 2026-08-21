@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace Jeomseon.Unity.GridTileSystem.Surface.Core
 {
@@ -22,6 +23,8 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
         public IReadOnlyList<SurfaceRegionVertex> Vertices => _verticesView;
         /// <summary>세 개씩 묶어 읽는 Triangle index를 가져옵니다.</summary>
         public IReadOnlyList<int> TriangleIndices => _triangleIndicesView;
+        /// <summary>clipping 결과가 차지하는 intrinsic 2D 면적을 가져옵니다.</summary>
+        public float IntrinsicArea { get; }
 
         /// <summary>Region builder가 소유한 vertex와 index 배열로 완성된 Region을 생성합니다.</summary>
         internal SurfaceRegion(SurfaceRegionVertex[] vertices, int[] triangleIndices)
@@ -30,6 +33,23 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             _triangleIndices = triangleIndices ?? throw new ArgumentNullException(nameof(triangleIndices));
             _verticesView = Array.AsReadOnly(_vertices);
             _triangleIndicesView = Array.AsReadOnly(_triangleIndices);
+            IntrinsicArea = CalculateIntrinsicArea(_vertices, _triangleIndices);
+        }
+
+        /// <summary>Region triangle들의 절댓값 면적을 합산합니다.</summary>
+        private static float CalculateIntrinsicArea(
+            IReadOnlyList<SurfaceRegionVertex> vertices,
+            IReadOnlyList<int> triangleIndices)
+        {
+            float areaTwice = 0f;
+            for (int i = 0; i < triangleIndices.Count; i += 3)
+            {
+                Vector2 a = vertices[triangleIndices[i]].IntrinsicPosition;
+                Vector2 b = vertices[triangleIndices[i + 1]].IntrinsicPosition;
+                Vector2 c = vertices[triangleIndices[i + 2]].IntrinsicPosition;
+                areaTwice += Mathf.Abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+            }
+            return areaTwice * 0.5f;
         }
     }
 }

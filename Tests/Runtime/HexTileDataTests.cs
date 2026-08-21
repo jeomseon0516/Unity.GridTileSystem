@@ -42,17 +42,22 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
         }
 
         [Test]
-        public void CalculateIndex_ForRadiusThree_IsUniqueAndContiguous()
+        public void Index_IsAssignedFromConstructorAndPreservedAcrossUserStateCopy()
         {
-            int radius = 3;
-            int[] indices = (
-                from q in Enumerable.Range(-radius, radius * 2 + 1)
-                from r in Enumerable.Range(-radius, radius * 2 + 1)
-                let coordinates = new HexCoordinates(q, r)
-                where Mathf.Abs(coordinates.S) <= radius
-                select HexTileData.CalculateIndex(coordinates, radius)).OrderBy(value => value).ToArray();
+            HexTile source = new(1, -2, Vector3.zero, Vector2.zero, 41);
+            source.Data.IsActive = false;
+            source.Data.Color = Color.magenta;
+            HexTile rebaked = new(1, -2, Vector3.zero, Vector2.zero, 7);
 
-            Assert.That(indices, Is.EqualTo(Enumerable.Range(0, 37).ToArray()));
+            // 재Bake는 순서 인덱스를 새로 부여하고 사용자 상태만 물려받아야 합니다.
+            typeof(HexTile)
+                .GetMethod("CopyStateFrom", System.Reflection.BindingFlags.Instance |
+                                            System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(rebaked, new object[] { source });
+
+            Assert.That(rebaked.Index, Is.EqualTo(7));
+            Assert.That(rebaked.Data.IsActive, Is.False);
+            Assert.That(rebaked.Data.Color, Is.EqualTo(Color.magenta));
         }
 
         [Test]

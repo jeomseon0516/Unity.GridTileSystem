@@ -49,6 +49,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
             List<Vector2> intrinsicPositions = new();
             List<int> tileIndices = new();
             List<int> triangleIndices = new();
+            List<SurfacePoint> surfacePoints = new();
             // 행렬 역산은 vertex마다 반복하기 비싸므로 snapshot 구축당 한 번만 계산합니다.
             Matrix4x4 normalMatrix = surfaceToTarget.inverse.transpose;
 
@@ -68,6 +69,9 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
                     normals.Add(targetNormal);
                     intrinsicPositions.Add(vertex.IntrinsicPosition);
                     tileIndices.Add(tileIndex);
+                    // 변형 추종 경로가 Geometry를 다시 만들지 않고 위치만 재평가할 수 있도록
+                    // 원본 Surface binding을 vertex 순서 그대로 보존합니다.
+                    surfacePoints.Add(vertex.SurfacePoint);
                 }
 
                 foreach (int sourceIndex in region.TriangleIndices)
@@ -81,7 +85,8 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
                 normals.ToArray(),
                 intrinsicPositions.ToArray(),
                 tileIndices.ToArray(),
-                triangleIndices.ToArray());
+                triangleIndices.ToArray(),
+                surfacePoints.ToArray());
         }
 
         /// <summary>원본 Triangle winding의 외적을 정규화해 Face 법선을 계산합니다.</summary>

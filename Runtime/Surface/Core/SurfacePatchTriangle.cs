@@ -2,9 +2,14 @@ using UnityEngine;
 
 namespace Jeomseon.Unity.GridTileSystem.Surface.Core
 {
-    /// <summary>원본 Triangle 하나와 corner 세 개의 local intrinsic 2D 위치를 저장합니다.</summary>
+    /// <summary>
+    /// 원본 Triangle 하나와 corner 세 개의 local intrinsic 2D 위치를 저장합니다.
+    /// chart가 여러 Surface에 걸칠 수 있으므로 각 Face는 자신이 속한 Surface를 함께 보존합니다.
+    /// </summary>
     public readonly struct SurfacePatchTriangle
     {
+        /// <summary>이 Face가 속한 원본 Surface를 가져옵니다.</summary>
+        public SurfaceHandle Surface { get; }
         /// <summary>원본 topology의 Triangle index를 가져옵니다.</summary>
         public int TriangleIndex { get; }
         /// <summary>원본 Triangle corner A에 대응하는 2D 위치를 가져옵니다.</summary>
@@ -15,13 +20,23 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
         public Vector2 C { get; }
 
         /// <summary>corner 순서가 원본 winding과 일치하는 Face별 intrinsic embedding을 생성합니다.</summary>
-        public SurfacePatchTriangle(int triangleIndex, in Vector2 a, in Vector2 b, in Vector2 c)
+        public SurfacePatchTriangle(
+            SurfaceHandle surface,
+            int triangleIndex,
+            in Vector2 a,
+            in Vector2 b,
+            in Vector2 c)
         {
+            Surface = surface;
             TriangleIndex = triangleIndex;
             A = a;
             B = b;
             C = c;
         }
+
+        /// <summary>이 Face가 지정한 Surface의 지정한 Triangle인지 검사합니다.</summary>
+        public bool Matches(SurfaceHandle surface, int triangleIndex) =>
+            Surface == surface && TriangleIndex == triangleIndex;
 
         /// <summary>원본 Triangle corner 0, 1, 2 중 하나의 intrinsic 좌표를 가져옵니다.</summary>
         public Vector2 GetCorner(int corner) => corner switch

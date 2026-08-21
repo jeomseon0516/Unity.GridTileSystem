@@ -20,7 +20,7 @@ namespace Jeomseon.Unity.GridTileSystem.Services
         /// <summary>좌표가 존재하면 활성 상태를 변경합니다.</summary>
         void SetActive(in AxialCoordinates coordinates, bool isActive);
         /// <summary>Surface Grid에서 목록을 재구성하고 같은 좌표의 사용자 상태를 보존합니다.</summary>
-        void Bake(SurfaceTopology topology, SurfaceGrid grid, Transform surfaceTransform, int gridRadius);
+        void Bake(SurfaceTopology topology, SurfaceGrid grid, Transform surfaceTransform);
         /// <summary>타일과 lookup을 모두 비웁니다.</summary>
         void Clear();
         /// <summary>역직렬화된 목록에서 lookup과 이벤트 연결을 복원합니다.</summary>

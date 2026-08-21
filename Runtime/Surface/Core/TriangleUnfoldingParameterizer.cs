@@ -54,11 +54,15 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             if (topology == null) throw new ArgumentNullException(nameof(topology));
             if ((uint)seedTriangleIndex >= (uint)topology.Triangles.Count)
                 throw new ArgumentOutOfRangeException(nameof(seedTriangleIndex));
+            if (!topology.IsTriangleTraversable(seedTriangleIndex))
+                throw new ArgumentException("Seed triangle is not traversable.", nameof(seedTriangleIndex));
 
-            var unfolded = new SurfacePatchTriangle?[topology.Triangles.Count];
+            Dictionary<int, SurfacePatchTriangle> unfolded = new();
+            List<SurfacePatchTriangle> acceptedTriangles = new();
             Queue<int> pending = new();
             SurfacePatchTriangle seedTriangle = UnfoldSeed(topology, seedTriangleIndex);
-            unfolded[seedTriangleIndex] = seedTriangle;
+            unfolded.Add(seedTriangleIndex, seedTriangle);
+            acceptedTriangles.Add(seedTriangle);
             // SurfacePoint overload는 실제 seed를, Triangle index overload는 Face 무게중심을 radius
             // 원점으로 씁니다. chart의 임의 좌표 원점(A corner)에 의존하면 같은 Patch라도 seed 위치에
             // 따라 성장 범위가 비대칭이 되는 잘못된 extrinsic 정책이 됩니다.
@@ -76,16 +80,16 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             while (pending.Count > 0)
             {
                 int currentIndex = pending.Dequeue();
-                SurfacePatchTriangle current = unfolded[currentIndex].Value;
+                SurfacePatchTriangle current = unfolded[currentIndex];
                 SurfaceTriangleAdjacency adjacency = topology.Adjacency[currentIndex];
 
                 for (int edge = 0; edge < 3; edge++)
                 {
                     int neighborIndex = adjacency.GetNeighbor(edge);
-                    if (neighborIndex < 0) continue;
+                    if (neighborIndex < 0 || !topology.IsTriangleTraversable(neighborIndex)) continue;
 
                     SurfacePatchTriangle candidate = UnfoldNeighbor(topology, current, edge, neighborIndex);
-                    if (!unfolded[neighborIndex].HasValue)
+                    if (!unfolded.TryGetValue(neighborIndex, out SurfacePatchTriangle existing))
                     {
                         Vector2 centroid = (candidate.A + candidate.B + candidate.C) / 3f;
                         if (acceptedTriangleCount >= settings.MaximumTriangleCount ||
@@ -97,7 +101,8 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                             continue;
                         }
 
-                        unfolded[neighborIndex] = candidate;
+                        unfolded.Add(neighborIndex, candidate);
+                        acceptedTriangles.Add(candidate);
                         acceptedTriangleCount++;
                         pending.Enqueue(neighborIndex);
                         continue;
@@ -108,22 +113,16 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                     // Edge 길이를 바꾸는 평균화를 하지 않고 최초 배치를 유지하며 차이를 오차로 노출합니다.
                     maximumClosureError = Mathf.Max(
                         maximumClosureError,
-                        MaximumCornerDistance(unfolded[neighborIndex].Value, candidate));
+                        MaximumCornerDistance(existing, candidate));
                     if (maximumClosureError > settings.MaximumClosureError)
                         closureToleranceExceeded = true;
                 }
             }
 
-            List<SurfacePatchTriangle> result = new();
-            for (int i = 0; i < unfolded.Length; i++)
-            {
-                if (unfolded[i].HasValue) result.Add(unfolded[i].Value);
-            }
-
             return new SurfacePatch(
                 topology.Handle,
                 seedTriangleIndex,
-                result.ToArray(),
+                acceptedTriangles.ToArray(),
                 maximumClosureError,
                 wasTruncated,
                 closureToleranceExceeded);
@@ -148,6 +147,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             if (cySquared <= EdgeLengthEpsilon * EdgeLengthEpsilon) throw DegenerateTriangle(triangleIndex);
 
             return new SurfacePatchTriangle(
+                topology.Handle,
                 triangleIndex,
                 Vector2.zero,
                 new Vector2(ab, 0f),
@@ -211,7 +211,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             corners[neighborStartCorner] = u2;
             corners[neighborEndCorner] = v2;
             corners[neighborOppositeCorner] = opposite2;
-            return new SurfacePatchTriangle(neighborIndex, corners[0], corners[1], corners[2]);
+            return new SurfacePatchTriangle(topology.Handle, neighborIndex, corners[0], corners[1], corners[2]);
         }
 
         /// <summary>원본 vertex index를 포함하는 Triangle local corner를 찾습니다.</summary>

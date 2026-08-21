@@ -26,7 +26,7 @@ namespace Jeomseon.Unity.GridTileSystem
         public Vector3 TilePosition => SafeData.TilePosition;
         /// <summary>호환성을 위해 보존한 intrinsic chart 중심 좌표를 가져옵니다.</summary>
         public Vector2 NormalizedPosition => SafeData.IntrinsicPosition;
-        /// <summary>Grid ring 순회 규칙으로 계산한 직렬 인덱스를 가져옵니다.</summary>
+        /// <summary>Bake 순서로 부여한 0 기반 직렬 인덱스를 가져옵니다.</summary>
         public int Index => SafeData.Index;
         /// <summary>Unity 이벤트와 분리된 순수 직렬화 데이터를 가져옵니다.</summary>
         public HexTileData Data => SafeData;
@@ -171,11 +171,11 @@ namespace Jeomseon.Unity.GridTileSystem
             SafeData.SetTilePosition(tilePosition);
         }
 
-        /// <summary>모든 표시 좌표와 ring 반경 기반 직렬 인덱스를 포함한 타일을 생성합니다.</summary>
-        public HexTile(int q, int r, in Vector3 tilePosition, in Vector2 normalizedPosition, int gridRadius)
+        /// <summary>모든 표시 좌표와 Bake 순서 인덱스를 포함한 타일을 생성합니다.</summary>
+        public HexTile(int q, int r, in Vector3 tilePosition, in Vector2 normalizedPosition, int index)
             : this(q, r)
         {
-            data = new HexTileData(q, r, tilePosition, normalizedPosition, gridRadius);
+            data = new HexTileData(q, r, tilePosition, normalizedPosition, index);
         }
 
         /// <summary>논리 좌표, 월드 위치와 intrinsic chart 위치를 포함한 타일을 생성합니다.</summary>
@@ -200,12 +200,6 @@ namespace Jeomseon.Unity.GridTileSystem
             data = new HexTileData(new AxialCoordinates(q, r));
             onChangedActive.SetPersistentListenerState(UnityEventCallState.EditorAndRuntime);
             onChangedColor.SetPersistentListenerState(UnityEventCallState.EditorAndRuntime);
-        }
-
-        /// <summary>반경 R인 Hex 영역의 q-major 열 순회에서 현재 좌표의 0 기반 인덱스를 계산합니다.</summary>
-        public int CalculateIndex(int gridRadius)
-        {
-            return HexTileData.CalculateIndex(SafeData.Coordinates, gridRadius);
         }
 
         /// <summary>재Bake된 같은 좌표 타일에 사용자 속성·활성·색상 상태를 복사합니다.</summary>

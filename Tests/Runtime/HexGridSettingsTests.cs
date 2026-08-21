@@ -12,13 +12,16 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             int changes = 0;
             settings.SettingsChanged += () => changes++;
 
+            settings.TileRadius = 2f;
+            // 음수는 최소값으로 보정되며, 기본값이 이미 최소값이므로 위에서 한 번 올려 두어야
+            // 보정 자체가 실제 변경으로 관측됩니다.
             settings.TileRadius = -10f;
-            settings.GridRadius = -3;
+            // 이미 최소값이므로 같은 방향의 추가 보정은 중복 알림을 만들지 않아야 합니다.
+            settings.TileRadius = -20f;
             settings.InteractionLayerMask = settings.InteractionLayerMask;
 
             Assert.That(settings.TileRadius, Is.EqualTo(HexGridSettings.TileRadiusMin));
-            Assert.That(settings.GridRadius, Is.Zero);
-            Assert.That(changes, Is.EqualTo(1));
+            Assert.That(changes, Is.EqualTo(2));
             Object.DestroyImmediate(settings);
         }
 

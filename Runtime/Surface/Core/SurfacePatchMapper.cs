@@ -21,7 +21,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
 
             foreach (SurfacePatchTriangle triangle in patch.Triangles)
             {
-                if (triangle.TriangleIndex != point.TriangleIndex) continue;
+                if (!triangle.Matches(point.Surface, point.TriangleIndex)) continue;
                 // 펼쳐진 corner에도 원본 Triangle과 같은 barycentric 가중치를 적용할 수 있습니다.
                 // Triangle Unfolding은 affine 좌표 관계를 보존하므로 3D와 2D에서 가중치가 동일합니다.
                 intrinsicPosition = triangle.A * point.Barycentric.x +

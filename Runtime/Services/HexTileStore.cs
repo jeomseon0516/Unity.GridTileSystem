@@ -39,7 +39,7 @@ namespace Jeomseon.Unity.GridTileSystem.Services
         }
 
         /// <summary>Surface Grid snapshot으로 Tile 목록을 재구축하면서 기존 사용자 상태를 보존합니다.</summary>
-        public void Bake(SurfaceTopology topology, SurfaceGrid grid, Transform surfaceTransform, int gridRadius)
+        public void Bake(SurfaceTopology topology, SurfaceGrid grid, Transform surfaceTransform)
         {
             if (topology == null) throw new ArgumentNullException(nameof(topology));
             if (grid == null) throw new ArgumentNullException(nameof(grid));
@@ -63,12 +63,14 @@ namespace Jeomseon.Unity.GridTileSystem.Services
                 Vector3 worldCenter = surfaceTransform.TransformPoint(localCenter);
                 HexCoordinates coordinates = tileRegion.Coordinates;
                 AxialCoordinates key = coordinates;
+                // Bake 순서 인덱스는 생성 Geometry의 Tile index와 같은 순서를 유지해야 합니다.
+                // Grid의 Tile Region 배열 순서를 그대로 따르므로 두 첨자가 항상 일치합니다.
                 HexTile tile = new(
                     coordinates.Q,
                     coordinates.R,
                     worldCenter,
                     tileRegion.IntrinsicCenter,
-                    gridRadius);
+                    _tiles.Count);
 
                 if (previousTiles.TryGetValue(key, out HexTile previousTile)) tile.CopyStateFrom(previousTile);
                 SubscribeToTile(tile);

@@ -51,37 +51,74 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
         }
 
         [Test]
-        public void Build_GridRadiusOneOnLargePlane_CreatesSevenLogicalTiles()
+        public void Build_WithoutGridRadius_KeepsOnlyCompleteHexRegions()
         {
             SurfaceTopology topology = CreateLargePlane();
             SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
 
             SurfaceGrid grid = SurfaceGridBuilder.Build(
-                topology, seed, 0.5f, 1, SurfacePatchBuildSettings.Unlimited);
+                topology, seed, 0.5f, SurfacePatchBuildSettings.Unlimited);
 
-            Assert.That(grid.Tiles.Count, Is.EqualTo(7));
-            Assert.That(grid.Tiles.Select(tile => tile.Coordinates).Distinct().Count(), Is.EqualTo(7));
+            float expectedArea = 3f * Mathf.Sqrt(3f) * 0.5f * 0.5f * 0.5f;
+            foreach (SurfaceGridTileRegion tile in grid.Tiles)
+            {
+                Assert.That(
+                    tile.Region.IntrinsicArea,
+                    Is.EqualTo(expectedArea).Within(expectedArea * 0.0001f),
+                    $"Tile {tile.Coordinates} was clipped at the surface boundary.");
+            }
+        }
+
+        [Test]
+        public void Build_WithoutGridRadius_KeepsCoordinatesUniqueAndRegionsBound()
+        {
+            SurfaceTopology topology = CreateLargePlane();
+            SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
+
+            SurfaceGrid grid = SurfaceGridBuilder.Build(
+                topology, seed, 0.5f, SurfacePatchBuildSettings.Unlimited);
+
+            Assert.That(grid.Tiles.Count, Is.GreaterThan(0));
+            Assert.That(
+                grid.Tiles.Select(tile => tile.Coordinates).Distinct().Count(),
+                Is.EqualTo(grid.Tiles.Count));
+            // 완전한 Hex만 남으므로 모든 Region은 유효한 Surface binding과 전체 면적을 가져야 합니다.
             Assert.That(grid.Tiles.All(tile => tile.Region.TriangleIndices.Count > 0), Is.True);
             Assert.That(grid.Tiles.SelectMany(tile => tile.Region.Vertices)
                 .All(vertex => vertex.SurfacePoint.IsValid), Is.True);
         }
 
         [Test]
-        public void Build_GridRadiusZero_CentersTileAtSeedPoint()
+        public void Build_SmallerTileRadius_ProducesFinerResolution()
+        {
+            SurfaceTopology topology = CreateLargePlane();
+            SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
+
+            SurfaceGrid coarse = SurfaceGridBuilder.Build(
+                topology, seed, 1f, SurfacePatchBuildSettings.Unlimited);
+            SurfaceGrid fine = SurfaceGridBuilder.Build(
+                topology, seed, 0.5f, SurfacePatchBuildSettings.Unlimited);
+
+            // Hex 면적은 반지름의 제곱에 비례하므로 반지름을 절반으로 줄이면 Tile 수는 약 4배가 됩니다.
+            // 외곽 여백 때문에 정확히 4배는 아니므로 넉넉한 하한만 검증합니다.
+            Assert.That(fine.Tiles.Count, Is.GreaterThan(coarse.Tiles.Count * 3));
+        }
+
+        [Test]
+        public void Build_PlacesGridOriginTileAtSeedPoint()
         {
             SurfaceTopology topology = CreateLargePlane();
             SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
 
             SurfaceGrid grid = SurfaceGridBuilder.Build(
-                topology, seed, 0.5f, 0, SurfacePatchBuildSettings.Unlimited);
-            SurfaceGridTileRegion tile = grid.Tiles.Single();
+                topology, seed, 0.5f, SurfacePatchBuildSettings.Unlimited);
 
             SurfacePatchTriangle seedTriangle = grid.Patch.Triangles.Single(t => t.TriangleIndex == 0);
             Vector2 expected = seedTriangle.A * seed.Barycentric.x +
                                seedTriangle.B * seed.Barycentric.y +
                                seedTriangle.C * seed.Barycentric.z;
-            Assert.That(tile.IntrinsicCenter, Is.EqualTo(expected));
-            Assert.That(tile.Coordinates, Is.EqualTo(new HexCoordinates(0, 0)));
+            Assert.That(grid.TryGetTile(new HexCoordinates(0, 0), out SurfaceGridTileRegion origin), Is.True);
+            Assert.That(origin.IntrinsicCenter, Is.EqualTo(expected));
         }
 
         [Test]
@@ -90,7 +127,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             SurfaceTopology topology = CreateLargePlane();
             SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
             SurfaceGrid grid = SurfaceGridBuilder.Build(
-                topology, seed, 0.5f, 1, SurfacePatchBuildSettings.Unlimited);
+                topology, seed, 0.5f, SurfacePatchBuildSettings.Unlimited);
 
             bool mapped = SurfacePatchMapper.TryGetIntrinsicPosition(grid.Patch, seed, out Vector2 intrinsic);
             HexCoordinates coordinates = grid.Layout.GetCoordinates(intrinsic);
@@ -108,7 +145,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             SurfaceTopology topology = CreateLargePlane();
             SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
             SurfaceGrid grid = SurfaceGridBuilder.Build(
-                topology, seed, 0.5f, 1, SurfacePatchBuildSettings.Unlimited);
+                topology, seed, 0.5f, SurfacePatchBuildSettings.Unlimited);
             SurfacePoint foreignPoint = new(new SurfaceHandle(999), 0, seed.Barycentric);
 
             Assert.That(

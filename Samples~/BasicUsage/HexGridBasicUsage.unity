@@ -277,14 +277,15 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   settings: {fileID: 11400000, guid: 63711e16820e4067bd5326c05bf7c34e, type: 2}
-  tiles: []
-  sourceMeshFilter: {fileID: 861021110}
-  surfaceCollider: {fileID: 861021109}
-  outputMeshFilter: {fileID: 1376087136}
-  outputMeshRenderer: {fileID: 1376087138}
+  receivers:
+  - sourceMeshFilter: {fileID: 861021110}
+    surfaceCollider: {fileID: 861021109}
+    outputMeshFilter: {fileID: 1376087136}
+    outputMeshRenderer: {fileID: 1376087138}
+    seedTriangleIndex: 100
+    seedBarycentric: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+    tiles: []
   mainCamera: {fileID: 1460498979}
-  seedTriangleIndex: 100
-  seedBarycentric: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
   maximumPatchTriangles: 4096
   maximumPatchRadius: 100
   maximumClosureError: 0.01

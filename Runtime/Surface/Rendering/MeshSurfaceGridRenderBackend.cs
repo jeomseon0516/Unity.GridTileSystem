@@ -70,6 +70,26 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
         }
 
         /// <inheritdoc />
+        public void ApplyDeformation(IReadOnlyList<Vector3> positions, IReadOnlyList<Vector3> normals)
+        {
+            if (positions == null) throw new ArgumentNullException(nameof(positions));
+            if (normals == null) throw new ArgumentNullException(nameof(normals));
+            if (_mesh == null) return;
+            // index buffer와 Tile 구성은 그대로 두고 vertex stream만 교체하므로 Mesh.Clear()를 호출하지
+            // 않습니다. 길이가 달라지면 기존 triangle index가 범위를 벗어나므로 즉시 거부합니다.
+            if (positions.Count != _mesh.vertexCount || normals.Count != _mesh.vertexCount)
+            {
+                throw new ArgumentException(
+                    $"Deformation must cover exactly {_mesh.vertexCount} vertices to keep the existing index buffer valid.",
+                    nameof(positions));
+            }
+
+            _mesh.vertices = Copy(positions);
+            _mesh.normals = Copy(normals);
+            _mesh.RecalculateBounds();
+        }
+
+        /// <inheritdoc />
         public void SetRenderingEnabled(bool enabled) => _meshRenderer.enabled = enabled;
 
         /// <inheritdoc />

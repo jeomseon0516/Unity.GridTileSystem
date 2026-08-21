@@ -1,0 +1,16 @@
+{
+  "name": "Jeomseon.Unity.GridTileSystem.Samples.TerrainUsage",
+  "rootNamespace": "Jeomseon.Unity.GridTileSystem.Samples.TerrainUsage",
+  "references": [
+    "Jeomseon.Unity.GridTileSystem"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

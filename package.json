@@ -31,6 +31,11 @@
       "displayName": "Basic Usage",
       "description": "Static Mesh Surface에 정합된 intrinsic 육각 Grid와 vertex-color 표현을 확인하는 예제입니다.",
       "path": "Samples~/BasicUsage"
+    },
+    {
+      "displayName": "Terrain Usage",
+      "description": "Terrain virtual topology와 굴곡 정합, TerrainCollider picking을 확인하는 예제입니다.",
+      "path": "Samples~/TerrainUsage"
     }
   ]
 }

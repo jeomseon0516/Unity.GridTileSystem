@@ -27,6 +27,12 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
         void ApplyGeometry(SurfaceGridGeometry geometry);
         /// <summary>Geometry를 유지하면서 Logical Tile의 색상과 활성 상태를 적용합니다.</summary>
         void ApplyVisuals(IReadOnlyList<SurfaceTileVisual> visuals);
+        /// <summary>
+        /// Tile 구성과 index buffer를 유지한 채 변형된 vertex 위치와 법선만 적용합니다.
+        /// Skinned Surface처럼 topology는 그대로이고 정점만 움직이는 입력에서 매 프레임 호출하는
+        /// 경로이며, 두 목록의 길이는 마지막으로 적용한 Geometry의 vertex 수와 같아야 합니다.
+        /// </summary>
+        void ApplyDeformation(IReadOnlyList<Vector3> positions, IReadOnlyList<Vector3> normals);
         /// <summary>Backend가 소유한 표현의 활성 상태를 변경합니다.</summary>
         void SetRenderingEnabled(bool enabled);
     }

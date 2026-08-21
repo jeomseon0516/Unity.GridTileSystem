@@ -9,11 +9,12 @@ namespace Jeomseon.Unity.GridTileSystem
     {
         /// <summary>Inspector에서 허용하는 최소 intrinsic Tile 반지름입니다.</summary>
         public const float TileRadiusMin = 0.025f;
-        /// <summary>Hex 중심에서 꼭짓점까지의 intrinsic Surface 길이입니다.</summary>
+        /// <summary>
+        /// Hex 중심에서 꼭짓점까지의 intrinsic Surface 길이입니다. Grid는 표면 전체를 덮으므로 이 값이
+        /// Tile 해상도를 정하는 유일한 설정이며, 작을수록 더 많은 Tile이 생성됩니다.
+        /// </summary>
         [SerializeField, Min(TileRadiusMin), FormerlySerializedAs("hexagonRadius")]
         private float tileRadius = 0.025f;
-        /// <summary>Seed Tile 주변에 생성할 Hex ring 개수입니다.</summary>
-        [SerializeField, Min(0), FormerlySerializedAs("tileLimit")] private int gridRadius = 3;
         /// <summary>Surface picking Physics Raycast에 사용할 layer mask입니다.</summary>
         [SerializeField, FormerlySerializedAs("layerMask")] private LayerMask interactionLayerMask;
 
@@ -29,19 +30,6 @@ namespace Jeomseon.Unity.GridTileSystem
                 float clamped = Mathf.Max(TileRadiusMin, value);
                 if (Mathf.Approximately(tileRadius, clamped)) return;
                 tileRadius = clamped;
-                SettingsChanged?.Invoke();
-            }
-        }
-
-        /// <summary>Hex Grid ring 반경을 가져오거나 설정하고 변경 이벤트를 발생시킵니다.</summary>
-        public int GridRadius
-        {
-            get => gridRadius;
-            set
-            {
-                int clamped = Mathf.Max(0, value);
-                if (gridRadius == clamped) return;
-                gridRadius = clamped;
                 SettingsChanged?.Invoke();
             }
         }
@@ -63,7 +51,6 @@ namespace Jeomseon.Unity.GridTileSystem
         private void OnValidate()
         {
             tileRadius = Mathf.Max(TileRadiusMin, tileRadius);
-            gridRadius = Mathf.Max(0, gridRadius);
             SettingsChanged?.Invoke();
         }
         #endif

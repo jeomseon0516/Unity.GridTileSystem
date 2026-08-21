@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Jeomseon.Unity.GridTileSystem.Tests
 {
-    public sealed class StaticMeshSurfaceAdapterTests
+    public sealed class MeshTopologyFactoryTests
     {
         [Test]
         public void BuildTopology_ReadableMesh_CreatesSurfaceIdentityAndTopology()
@@ -17,7 +17,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
                 triangles = new[] { 0, 1, 2 }
             };
 
-            SurfaceTopology topology = StaticMeshSurfaceAdapter.BuildTopology(mesh);
+            SurfaceTopology topology = MeshTopologyFactory.BuildTopology(mesh);
 
             Assert.That(topology.Handle.IsValid, Is.True);
             Assert.That(topology.Positions.Count, Is.EqualTo(3));
@@ -32,8 +32,8 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             Mesh second = CreateTriangleMesh();
             try
             {
-                SurfaceTopology firstTopology = StaticMeshSurfaceAdapter.BuildTopology(first);
-                SurfaceTopology secondTopology = StaticMeshSurfaceAdapter.BuildTopology(second);
+                SurfaceTopology firstTopology = MeshTopologyFactory.BuildTopology(first);
+                SurfaceTopology secondTopology = MeshTopologyFactory.BuildTopology(second);
 
                 Assert.That(firstTopology.Handle, Is.Not.EqualTo(secondTopology.Handle));
             }

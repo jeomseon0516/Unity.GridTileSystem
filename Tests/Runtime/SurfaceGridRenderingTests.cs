@@ -15,7 +15,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             SurfaceTopology topology = CreatePlane();
             SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
             SurfaceGrid grid = SurfaceGridBuilder.Build(
-                topology, seed, 0.5f, 1, SurfacePatchBuildSettings.Unlimited);
+                topology, seed, 4f, SurfacePatchBuildSettings.Unlimited);
 
             SurfaceGridGeometry geometry = SurfaceGridGeometryBuilder.Build(topology, grid);
 
@@ -33,7 +33,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             SurfaceTopology topology = CreatePlane();
             SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
             SurfaceGrid grid = SurfaceGridBuilder.Build(
-                topology, seed, 0.5f, 0, SurfacePatchBuildSettings.Unlimited);
+                topology, seed, 4f, SurfacePatchBuildSettings.Unlimited);
             SurfaceGridGeometry geometry = SurfaceGridGeometryBuilder.Build(topology, grid);
             GameObject host = new(nameof(MeshBackend_AppliesGeometryAndVisualAlphaWithoutPipelineTypes));
             MeshFilter filter = host.AddComponent<MeshFilter>();
@@ -41,7 +41,11 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             MeshSurfaceGridRenderBackend backend = new(filter, renderer);
 
             backend.ApplyGeometry(geometry);
-            backend.ApplyVisuals(new[] { new SurfaceTileVisual(Color.red, false) });
+            // 시각 상태 배열은 항상 현재 Geometry의 Tile 개수를 모두 덮어야 합니다.
+            SurfaceTileVisual[] visuals = Enumerable
+                .Repeat(new SurfaceTileVisual(Color.red, false), grid.Tiles.Count)
+                .ToArray();
+            backend.ApplyVisuals(visuals);
 
             Assert.That(filter.sharedMesh, Is.Not.Null);
             Assert.That(filter.sharedMesh.vertexCount, Is.EqualTo(geometry.Positions.Count));
@@ -56,7 +60,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             SurfaceTopology topology = CreatePlane();
             SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
             SurfaceGrid grid = SurfaceGridBuilder.Build(
-                topology, seed, 0.5f, 0, SurfacePatchBuildSettings.Unlimited);
+                topology, seed, 4f, SurfacePatchBuildSettings.Unlimited);
 
             SurfaceGridGeometry geometry = SurfaceGridGeometryBuilder.Build(
                 topology, grid, Matrix4x4.identity, 0.25f);
@@ -74,7 +78,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
                 new[] { 0, 1, 2, 2, 1, 3 });
             SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
             SurfaceGrid grid = SurfaceGridBuilder.Build(
-                topology, seed, 0.5f, 0, SurfacePatchBuildSettings.Unlimited);
+                topology, seed, 4f, SurfacePatchBuildSettings.Unlimited);
 
             Assert.That(
                 () => SurfaceGridGeometryBuilder.Build(anotherTopology, grid),
@@ -102,7 +106,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             SurfaceTopology topology = CreatePlane();
             SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
             SurfaceGrid grid = SurfaceGridBuilder.Build(
-                topology, seed, 0.5f, 4, SurfacePatchBuildSettings.Unlimited);
+                topology, seed, 4f, SurfacePatchBuildSettings.Unlimited);
             GameObject surface = new(nameof(Picker_RaycastsOnlyTheConfiguredSurfaceCollider));
             GameObject blocker = GameObject.CreatePrimitive(PrimitiveType.Cube);
             MeshCollider surfaceCollider = surface.AddComponent<MeshCollider>();
@@ -138,7 +142,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             SurfaceTopology topology = CreatePlane();
             SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
             SurfaceGrid grid = SurfaceGridBuilder.Build(
-                topology, seed, 0.5f, 0, SurfacePatchBuildSettings.Unlimited);
+                topology, seed, 4f, SurfacePatchBuildSettings.Unlimited);
             SurfaceGridGeometry geometry = SurfaceGridGeometryBuilder.Build(topology, grid);
 
             Assert.That(topology.Positions, Is.Not.InstanceOf<Vector3[]>());

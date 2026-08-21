@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Jeomseon.Unity.GridTileSystem.Services;
 using Jeomseon.Unity.GridTileSystem.Surface.Core;
 using Jeomseon.Unity.GridTileSystem.Surface.Grid;
@@ -26,20 +27,25 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
                 },
                 new[] { 0, 1, 2, 2, 1, 3 });
             SurfacePoint seed = new(_topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
-            _grid = SurfaceGridBuilder.Build(_topology, seed, 0.5f, 1, SurfacePatchBuildSettings.Unlimited);
+            _grid = SurfaceGridBuilder.Build(_topology, seed, 4f, SurfacePatchBuildSettings.Unlimited);
         }
 
         [TearDown]
         public void TearDown() => Object.DestroyImmediate(_surfaceHost);
 
         [Test]
-        public void Bake_GridRadiusOne_CreatesSevenUniqueTilesAndPopulatesLookup()
+        public void Bake_CoveringSurface_PopulatesLookupWithUniqueCoordinatesAndOrderedIndices()
         {
             List<HexTile> tiles = new();
             HexTileStore store = CreateStore(tiles);
-            Assert.That(tiles, Has.Count.EqualTo(7));
+
+            Assert.That(tiles, Is.Not.Empty);
+            Assert.That(tiles.Count, Is.EqualTo(_grid.Tiles.Count));
+            Assert.That(tiles.Select(tile => tile.Coordinates).Distinct().Count(), Is.EqualTo(tiles.Count));
+            // Bake 순서 인덱스는 Geometry의 Tile index와 같아야 하므로 목록 순서와 일치해야 합니다.
+            for (int i = 0; i < tiles.Count; i++) Assert.That(tiles[i].Index, Is.EqualTo(i));
             Assert.That(store.TryGetTile(new HexCoordinates(0, 0), out _), Is.True);
-            Assert.That(store.TryGetTile(new HexCoordinates(5, 5), out _), Is.False);
+            Assert.That(store.TryGetTile(new HexCoordinates(9999, 9999), out _), Is.False);
         }
 
         [Test]
@@ -49,10 +55,10 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             HexTileStore store = CreateStore(tiles);
             store.TryGetTile(new HexCoordinates(0, 0), out HexTile first);
             first.AddProperty("marker");
-            store.Bake(_topology, _grid, _surfaceHost.transform, 1);
+            store.Bake(_topology, _grid, _surfaceHost.transform);
 
             store.TryGetTile(new HexCoordinates(0, 0), out HexTile second);
-            Assert.That(tiles, Has.Count.EqualTo(7));
+            Assert.That(tiles, Has.Count.EqualTo(_grid.Tiles.Count));
             Assert.That(second, Is.Not.SameAs(first));
             Assert.That(second.Properties, Does.Contain("marker"));
         }
@@ -81,7 +87,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             HexTileStore store = new(tiles);
             int fireCount = 0;
             store.TileVisualsChanged += () => fireCount++;
-            store.Bake(_topology, _grid, _surfaceHost.transform, 1);
+            store.Bake(_topology, _grid, _surfaceHost.transform);
             Assert.That(fireCount, Is.EqualTo(1));
             tiles[0].IsActive = false;
             tiles[0].Color = Color.red;
@@ -112,7 +118,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
         private HexTileStore CreateStore(List<HexTile> tiles)
         {
             HexTileStore store = new(tiles);
-            store.Bake(_topology, _grid, _surfaceHost.transform, 1);
+            store.Bake(_topology, _grid, _surfaceHost.transform);
             return store;
         }
     }

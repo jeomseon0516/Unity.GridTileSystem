@@ -15,7 +15,7 @@ namespace Jeomseon.Unity.GridTileSystem.Samples.BasicUsage
         /// <summary>vertex color를 눈으로 확인하기 위해 Sample이 생성하고 파괴하는 runtime Material입니다.</summary>
         private Material _sampleMaterial;
 
-        /// <summary>Controller의 초기 Bake 결과를 기록하고 Tile 진입 이벤트를 구독합니다.</summary>
+        /// <summary>Controller의 초기 Bake 결과를 기록하고 네 가지 Tile 상호작용 이벤트를 구독합니다.</summary>
         private void Start()
         {
             if (gridController == null)
@@ -25,16 +25,22 @@ namespace Jeomseon.Unity.GridTileSystem.Samples.BasicUsage
 
             ConfigureSampleMaterial();
             ApplyCheckerColors();
-            Debug.Log($"Generated hex tile count: {gridController.Tiles.Count}");
+            Debug.Log($"Generated hex tile count: {gridController.TileCount}");
             gridController.OnEnterTile += HandleEnterTile;
+            gridController.OnExitTile += HandleExitTile;
+            gridController.OnMouseDownTile += HandleMouseDownTile;
+            gridController.OnMouseUpTile += HandleMouseUpTile;
         }
 
-        /// <summary>Scene 종료 시 Sample이 추가한 Tile 진입 구독을 대칭 해제합니다.</summary>
+        /// <summary>Scene 종료 시 Sample이 추가한 Tile 상호작용 구독을 대칭 해제합니다.</summary>
         private void OnDestroy()
         {
             if (gridController != null)
             {
                 gridController.OnEnterTile -= HandleEnterTile;
+                gridController.OnExitTile -= HandleExitTile;
+                gridController.OnMouseDownTile -= HandleMouseDownTile;
+                gridController.OnMouseUpTile -= HandleMouseUpTile;
             }
             MeshRenderer outputRenderer = GetComponent<MeshRenderer>();
             if (outputRenderer != null && outputRenderer.sharedMaterial == _sampleMaterial)
@@ -69,10 +75,13 @@ namespace Jeomseon.Unity.GridTileSystem.Samples.BasicUsage
         {
             Color even = new(0.08f, 0.65f, 1f, 0.82f);
             Color odd = new(0.12f, 0.95f, 0.68f, 0.82f);
-            foreach (HexTile tile in gridController.Tiles)
+            foreach (HexGridReceiver receiver in gridController.Receivers)
             {
-                int parity = (tile.Coordinates.Q - tile.Coordinates.R) & 1;
-                tile.Data.Color = parity == 0 ? even : odd;
+                foreach (HexTile tile in receiver.Tiles)
+                {
+                    int parity = (tile.Coordinates.Q - tile.Coordinates.R) & 1;
+                    tile.Data.Color = parity == 0 ? even : odd;
+                }
             }
             gridController.RefreshRendering();
         }
@@ -81,6 +90,27 @@ namespace Jeomseon.Unity.GridTileSystem.Samples.BasicUsage
         private static void HandleEnterTile(IHexTile tile)
         {
             Debug.Log($"Entered tile: {tile.Coordinates}");
+        }
+
+        /// <summary>
+        /// Pointer가 Logical Tile에서 벗어났을 때 좌표를 기록합니다. 타일 사이를 곧바로 이동하면
+        /// 새 타일의 Enter가 먼저, 이전 타일의 Exit가 그다음 순서로 출력됩니다.
+        /// </summary>
+        private static void HandleExitTile(IHexTile tile)
+        {
+            Debug.Log($"Exited tile: {tile.Coordinates}");
+        }
+
+        /// <summary>활성 Tile 위에서 pointer down이 발생했을 때 좌표를 기록합니다.</summary>
+        private static void HandleMouseDownTile(IHexTile tile)
+        {
+            Debug.Log($"Pointer down on tile: {tile.Coordinates}");
+        }
+
+        /// <summary>활성 Tile 위에서 pointer up이 발생했을 때 좌표를 기록합니다.</summary>
+        private static void HandleMouseUpTile(IHexTile tile)
+        {
+            Debug.Log($"Pointer up on tile: {tile.Coordinates}");
         }
     }
 }

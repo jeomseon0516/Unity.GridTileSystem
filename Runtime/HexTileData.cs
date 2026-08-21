@@ -16,7 +16,7 @@ namespace Jeomseon.Unity.GridTileSystem
         [SerializeField, ReadOnly] private Vector3 tilePosition;
         /// <summary>intrinsic chart의 타일 중심 좌표입니다.</summary>
         [SerializeField, ReadOnly] private Vector2 intrinsicPosition;
-        /// <summary>Grid ring 순회 규칙으로 계산한 직렬 인덱스입니다.</summary>
+        /// <summary>Bake 순서로 부여한 0 기반 직렬 인덱스입니다.</summary>
         [SerializeField, ReadOnly] private int index;
         /// <summary>선택과 시각화에 사용할 활성 상태입니다.</summary>
         [SerializeField] private bool isActive = true;
@@ -31,20 +31,25 @@ namespace Jeomseon.Unity.GridTileSystem
         public Vector3 TilePosition => tilePosition;
         /// <summary>intrinsic chart 중심 좌표를 가져옵니다.</summary>
         public Vector2 IntrinsicPosition => intrinsicPosition;
-        /// <summary>Grid ring 순회 기반 직렬 인덱스를 가져옵니다.</summary>
+        /// <summary>
+        /// Bake 순서로 부여한 0 기반 직렬 인덱스를 가져옵니다. 이 값은 Controller의 Tile 목록 순서이자
+        /// 생성 Geometry의 Tile index와 같으므로, 렌더 Backend에 넘기는 시각 상태 배열의 첨자로
+        /// 그대로 사용할 수 있습니다. Grid를 다시 Bake하면 재부여되므로 영구 식별자가 아닙니다.
+        /// 영구 식별에는 <see cref="Coordinates"/>를 사용합니다.
+        /// </summary>
         public int Index => index;
         /// <summary>활성 상태를 가져오거나 설정합니다.</summary>
         public bool IsActive { get => isActive; set => isActive = value; }
         /// <summary>시각화 색상을 가져오거나 설정합니다.</summary>
         public Color Color { get => color; set => color = value; }
 
-        /// <summary>모든 위치와 직렬 인덱스를 포함한 타일 데이터를 생성합니다.</summary>
-        public HexTileData(int q, int r, in Vector3 tilePosition, in Vector2 intrinsicPosition, int gridRadius)
+        /// <summary>모든 위치와 Bake 순서 인덱스를 포함한 타일 데이터를 생성합니다.</summary>
+        public HexTileData(int q, int r, in Vector3 tilePosition, in Vector2 intrinsicPosition, int index)
         {
             coordinates = new HexCoordinates(q, r);
             this.tilePosition = tilePosition;
             this.intrinsicPosition = intrinsicPosition;
-            index = CalculateIndex(coordinates, gridRadius);
+            this.index = index;
         }
 
         /// <summary>Axial 좌표만 포함한 기본 타일 데이터를 생성합니다.</summary>
@@ -57,6 +62,8 @@ namespace Jeomseon.Unity.GridTileSystem
         public bool RemoveProperty(string property) => properties.RemoveAll(value => value == property) > 0;
         /// <summary>표시용 월드 위치를 갱신합니다. 논리 identity에는 영향을 주지 않습니다.</summary>
         public void SetTilePosition(in Vector3 position) => tilePosition = position;
+        /// <summary>Bake 순서 인덱스를 갱신합니다. 논리 identity에는 영향을 주지 않습니다.</summary>
+        internal void SetIndex(int value) => index = value;
 
         /// <summary>같은 좌표의 이전 데이터에서 사용자가 수정할 수 있는 상태만 복사합니다.</summary>
         internal void CopyUserStateFrom(HexTileData source)
@@ -67,17 +74,5 @@ namespace Jeomseon.Unity.GridTileSystem
             color = source.color;
         }
 
-        /// <summary>반경 R인 Hex 영역의 q-major 열 순회에서 좌표의 0 기반 인덱스를 계산합니다.</summary>
-        public static int CalculateIndex(in HexCoordinates coordinates, int gridRadius)
-        {
-            int q = coordinates.Q;
-            int r = coordinates.R;
-            // Cube 제약 |q|, |r|, |s| <= R을 동시에 만족하는 현재 q 열의 첫 r입니다.
-            int rMin = Mathf.Max(-gridRadius, -q - gridRadius);
-            int index = (2 * gridRadius + 1) * (q + gridRadius);
-            // 직사각형 열 누적값에서 육각 경계 밖의 위·아래 삼각형 셀 수를 차례로 제거합니다.
-            for (int previousQ = -gridRadius; previousQ < q; previousQ++) index -= Mathf.Abs(previousQ);
-            return index + r - rMin;
-        }
     }
 }

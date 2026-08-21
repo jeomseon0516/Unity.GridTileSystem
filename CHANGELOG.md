@@ -4,6 +4,59 @@
 
 ## [Unreleased]
 
+- Skinned Mesh 변형 추종을 추가했습니다. `SurfaceReceiverKind.SkinnedMesh` Receiver는 bind pose Mesh로
+  topology를 만들고, Grid vertex마다 소속 Triangle 세 정점의 bone 가중치를 barycentric으로 보간해
+  같은 bone index끼리 합산·정규화한 `SurfaceSkinBinding`을 Bake 시점에 한 번 만듭니다. 이후에는
+  bone Transform에서 유도한 skinning 행렬만 바뀌므로 **매 프레임 `BakeMesh`를 호출하지 않고**
+  topology·Patch·clipping·Tile 구성을 그대로 유지한 채 vertex 위치와 법선만 갱신합니다.
+  Animator가 bone 자세를 확정한 뒤 실행되도록 `LateUpdate`에서 갱신합니다.
+- `ISurfaceGridRenderBackend.ApplyDeformation(positions, normals)`을 추가했습니다. Geometry와 index
+  buffer를 유지한 채 vertex stream만 교체하며, 길이가 다르면 기존 index가 무효해지므로 거부합니다.
+- `SurfaceGridGeometry.SurfacePoints`를 추가했습니다. vertex별 원본 barycentric binding을 보존하므로
+  변형 추종 경로가 Geometry 순서와 어긋날 위험 없이 binding을 파생할 수 있습니다.
+- Skinned Receiver의 Collider는 선택 사항입니다. 지정하지 않으면 picking 없이 논리 Grid와 표현만
+  유지하며, 지정하면 bind pose 기준으로 picking합니다(변형 중에는 실제 표면과 어긋날 수 있음).
+- Terrain heightfield의 position/triangle/adjacency를 계산형 read-only view로 제공하는 virtual topology
+  Adapter를 추가했습니다. 전체 Terrain Mesh를 복제하지 않으며 hole Face는 펼침 traversal과 picking에서
+  제외합니다. `HexGridReceiver.SurfaceKind`로 Static Mesh와 Terrain 입력을 선택할 수 있습니다.
+- `Terrain Usage` Sample Scene을 추가하고 Unity 6000.5.7f1에서 실제 Bake 결과 12개 Tile/952개 vertex와
+  전체 EditMode 테스트 121/121을 검증했습니다.
+- Patch 펼침 방문 상태를 전체 topology 크기의 배열에서 수용된 Triangle만 보관하는 Dictionary/List로
+  변경해 Terrain 크기와 무관하게 설정된 Patch 제한에 비례하도록 했습니다.
+- 외곽 생성 정책을 Surface와 일부라도 겹치는 Tile 포함에서 **전체 Hex 면적이 Surface 안에 들어오는
+  완전한 Tile만 유지**하는 방식으로 변경했습니다. `SurfaceRegion.IntrinsicArea`와 원본 Hex 면적을
+  상대 오차 안에서 비교하므로 여러 Triangle과 접힌 경계를 가로지르는 완전한 Tile은 유지하고,
+  Surface 외곽에서 잘린 Tile만 Logical Grid와 출력 Mesh에서 제외합니다.
+- **(Breaking)** `HexGridController`의 단일 source/collider/output/seed/tiles 필드를 제거하고
+  `Receivers` 목록으로 교체했습니다. 각 `HexGridReceiver`는 독립 topology, Patch, 좌표계, Tile 상태,
+  picker와 선택적 Mesh Backend를 소유합니다. 여러 표면의 같은 `(q,r)` 좌표는 서로 다른 Tile이며,
+  상태 변경에는 Receiver index를 함께 지정합니다.
+- Receiver 하나의 구성 또는 Bake가 실패해도 나머지 Receiver는 계속 생성되는 부분 실패 계약을
+  추가했습니다. Picking은 구성된 Receiver Collider들을 직접 검사해 Ray에서 가장 가까운 활성 Tile을
+  반환합니다.
+- **(Breaking)** `GridRadius` 설정을 제거했습니다. Grid 범위를 seed 중심 Hex ring 개수로 지정하던
+  방식은 Projector/Shader 시절의 제약이었습니다. 이제 사용자는 Tile 해상도(`TileRadius`)만 정하고
+  Grid는 **Patch가 펼친 Surface 전체를 덮습니다**. 덮는 최대 범위는 기존
+  `maximumPatchTriangles`/`maximumPatchRadius`가 성능 안전장치로 계속 제어합니다.
+  `SurfaceGridBuilder.Build`에서 `gridRadius` 매개변수가 사라졌고,
+  `IHexTileStore.Bake`도 같은 매개변수를 더 이상 받지 않습니다.
+- `SurfacePatch.IntrinsicBounds`를 추가했습니다. Grid 생성이 이 경계에서 덮어야 할 Tile 좌표 구간을
+  직접 산출합니다. flat-top layout의 중심 x가 q에만 의존하는 성질을 이용해 열을 먼저 확정하고
+  각 열의 행 구간을 닫힌 형태로 계산한 뒤, 완전히 포함되지 않는 외곽 후보를 제거합니다.
+- **(Breaking)** `HexTileData.CalculateIndex`와 `HexTile.CalculateIndex`를 제거했습니다. Hex ring
+  순회를 전제한 인덱스는 표면 전체를 덮는 Grid에서 의미가 없습니다. `Index`는 이제 **Bake 순서로
+  부여한 0 기반 값**이며, Controller의 Tile 목록 순서이자 생성 Geometry의 Tile index와 같으므로
+  렌더 Backend에 넘기는 시각 상태 배열의 첨자로 그대로 쓸 수 있습니다. 영구 식별에는 계속
+  `Coordinates`를 사용합니다.
+- `Basic Usage` Sample이 `OnEnterTile`만 구독하던 것을 `OnExitTile`/`OnMouseDownTile`/
+  `OnMouseUpTile`까지 확장해 네 가지 Tile 상호작용 계약을 Console에서 모두 확인할 수 있게
+  했습니다. Sample README에 동작별 기대 로그 표와, `HexTileSelectionState`가 **새 Tile의 Enter를
+  이전 Tile의 Exit보다 먼저** 발행한다는 순서 계약을 명시했습니다.
+- `ProcessPointer` 통합 테스트의 카메라 배치 결함을 수정했습니다. 테스트 평면 Mesh의 winding 법선은
+  `+z`인데 카메라가 `-z`쪽에서 진입해 `Physics.queriesHitBackfaces` 기본값(false) 아래에서
+  `Collider.Raycast`가 항상 실패했고, 앞면에서 진입하더라도 화면 중앙 ray가 Grid seed가 아닌 원점을
+  겨냥해 Grid 범위 밖 좌표를 반환했습니다. 카메라를 seed 앞면으로 옮겨 enter/down/up/exit 이벤트
+  순서를 실제로 검증합니다. Unity 6000.5.7f1 EditMode CLI 결과는 119/119입니다.
 - **(Breaking)** Projector/Shader 패키지 의존, Effect, Projection Shader와 Buffer Uploader를 완전히
   제거하고 Triangle topology 기반 intrinsic Surface Grid로 교체했습니다.
 - compact adjacency, topology 진단, Triangle Unfolding local Patch, convex clipping, barycentric binding,
