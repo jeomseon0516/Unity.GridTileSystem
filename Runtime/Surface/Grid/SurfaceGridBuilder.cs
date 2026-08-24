@@ -78,7 +78,20 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             float tileRadius,
             in SurfacePatchBuildSettings patchSettings,
             float rotation) =>
-            BuildCore(surfaces, seed, tileRadius, patchSettings, rotation, Vector3.zero);
+            BuildCore(surfaces, seed, tileRadius, patchSettings, rotation, Vector3.zero, null);
+
+        /// <summary>
+        /// 연결 계층을 함께 받아 chart가 Surface 경계를 넘어 확장될 수 있는 Grid를 생성합니다.
+        /// 연결은 Grid가 실제로 경계에 도달했을 때만 질의되므로 월드를 미리 연결해 둘 필요가 없습니다.
+        /// </summary>
+        public static SurfaceGrid Build(
+            ISurfaceProvider surfaces,
+            in SurfacePoint seed,
+            float tileRadius,
+            in SurfacePatchBuildSettings patchSettings,
+            in Vector3 initialSurfaceDirection,
+            ISurfaceConnectivity connectivity) =>
+            BuildCore(surfaces, seed, tileRadius, patchSettings, 0f, initialSurfaceDirection, connectivity);
 
         /// <summary>
         /// Surface local 방향을 격자 초기 방향으로 삼아 provider 기반 Grid를 생성합니다. seed Face의
@@ -90,7 +103,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             float tileRadius,
             in SurfacePatchBuildSettings patchSettings,
             in Vector3 initialSurfaceDirection) =>
-            BuildCore(surfaces, seed, tileRadius, patchSettings, 0f, initialSurfaceDirection);
+            BuildCore(surfaces, seed, tileRadius, patchSettings, 0f, initialSurfaceDirection, null);
 
         /// <summary>
         /// 회전각 또는 Surface local 초기 방향 중 하나로 격자 방향을 결정하는 실제 구현입니다.
@@ -102,7 +115,8 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             float tileRadius,
             in SurfacePatchBuildSettings patchSettings,
             float rotation,
-            in Vector3 initialSurfaceDirection)
+            in Vector3 initialSurfaceDirection,
+            ISurfaceConnectivity connectivity)
         {
             if (surfaces == null) throw new ArgumentNullException(nameof(surfaces));
             if (!seed.IsValid) throw new ArgumentException("Seed must be a valid surface point.", nameof(seed));
@@ -111,7 +125,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             if (tileRadius <= 0f || float.IsNaN(tileRadius) || float.IsInfinity(tileRadius))
                 throw new ArgumentOutOfRangeException(nameof(tileRadius));
 
-            SurfacePatch patch = TriangleUnfoldingParameterizer.Build(topology, seed, patchSettings);
+            SurfacePatch patch = TriangleUnfoldingParameterizer.Build(surfaces, seed, patchSettings, connectivity);
             SurfacePatchTriangle seedTriangle = FindPatchTriangle(patch, seed);
             Vector2 seedIntrinsic = seedTriangle.A * seed.Barycentric.x +
                                     seedTriangle.B * seed.Barycentric.y +
@@ -132,7 +146,8 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
                     AxialCoordinates axial = new(q, r);
                     Vector2 center = layout.GetCenter(axial);
                     Vector2[] corners = layout.GetCorners(axial);
-                    SurfaceRegion region = SurfaceRegionBuilder.Build(topology, patch, corners);
+                    // chart가 여러 Surface에 걸칠 수 있으므로 Region은 Face별 Surface identity를 씁니다.
+                    SurfaceRegion region = SurfaceRegionBuilder.Build(patch, corners);
                     if (!CoversEntirePolygon(region, corners)) continue;
 
                     tiles.Add(new SurfaceGridTileRegion(new HexCoordinates(q, r), center, region));

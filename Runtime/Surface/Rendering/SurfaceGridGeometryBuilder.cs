@@ -33,6 +33,15 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
             if (grid == null) throw new ArgumentNullException(nameof(grid));
             if (grid.Patch.Surface != topology.Handle)
                 throw new ArgumentException("Grid belongs to another surface topology.", nameof(grid));
+            if (grid.Patch.SpansMultipleSurfaces)
+            {
+                // 여러 Surface에 걸친 chart는 Surface마다 다른 local-to-world 변환을 가지므로 하나의
+                // 출력 Mesh로 합치려면 Surface별 변환이 필요합니다. 조용히 잘못된 Geometry를 만드는
+                // 대신 명시적으로 거부합니다.
+                throw new ArgumentException(
+                    "Grid spans multiple surfaces; multi-surface geometry output is not supported yet.",
+                    nameof(grid));
+            }
             if (surfaceOffset < 0f || float.IsNaN(surfaceOffset) || float.IsInfinity(surfaceOffset))
                 throw new ArgumentOutOfRangeException(nameof(surfaceOffset));
             if (!IsFinite(surfaceToTarget))

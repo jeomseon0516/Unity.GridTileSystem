@@ -38,6 +38,8 @@
 - [x] chart 원점 기준 격자 회전(`IntrinsicHexLayout.Rotation`)과 회전한 격자의 경계 구간 산출
 - [x] Surface local 방향을 chart 방향으로 옮기는 `SurfaceChartDirection`
 - [x] 월드 seed 위치 하나로 Grid를 만드는 `SurfaceGridRequest`/`SurfaceGridSystem`과 상태 기반 실패 진단
+- [x] boundary Edge 위치·법선 정합으로 이어지는 Surface를 찾는 `ISurfaceConnectivity`와
+      `GeometrySurfaceConnectivity`, 여러 Surface에 걸치는 chart 확장
 
 ## 안정화 게이트
 

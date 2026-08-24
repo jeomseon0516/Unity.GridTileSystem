@@ -23,6 +23,19 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             if (patch == null) throw new ArgumentNullException(nameof(patch));
             if (patch.Surface != topology.Handle)
                 throw new ArgumentException("Patch belongs to another surface.", nameof(patch));
+            return Build(patch, convexPolygon);
+        }
+
+        /// <summary>
+        /// Surface topology 없이 Patch가 보존한 Face별 Surface identity만으로 Region을 만듭니다.
+        /// clipping과 barycentric 복원은 2D chart 좌표만 사용하므로 topology가 필요 없으며, 덕분에
+        /// 여러 Surface에 걸친 chart도 Face마다 올바른 Surface를 가리키는 Region을 만들 수 있습니다.
+        /// </summary>
+        public static SurfaceRegion Build(
+            SurfacePatch patch,
+            IReadOnlyList<Vector2> convexPolygon)
+        {
+            if (patch == null) throw new ArgumentNullException(nameof(patch));
             if (convexPolygon == null) throw new ArgumentNullException(nameof(convexPolygon));
             if (convexPolygon.Count < 3)
                 throw new ArgumentException("Clipping polygon must contain at least three vertices.", nameof(convexPolygon));
@@ -46,7 +59,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                 foreach (Vector2 point in clipped)
                 {
                     Vector3 barycentric = CalculateBarycentric(patchTriangle, point);
-                    SurfacePoint surfacePoint = new(topology.Handle, patchTriangle.TriangleIndex, barycentric);
+                    SurfacePoint surfacePoint = new(patchTriangle.Surface, patchTriangle.TriangleIndex, barycentric);
                     vertices.Add(new SurfaceRegionVertex(point, surfacePoint));
                 }
 

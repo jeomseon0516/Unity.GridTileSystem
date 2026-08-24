@@ -15,8 +15,14 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
         /// <summary>내부 배열의 외부 변경을 차단하는 Face view입니다.</summary>
         private readonly IReadOnlyList<SurfacePatchTriangle> _trianglesView;
 
-        /// <summary>이 Patch를 생성한 원본 Surface identity를 가져옵니다.</summary>
+        /// <summary>
+        /// 펼침을 시작한 seed Surface identity를 가져옵니다. chart가 연결을 건너 다른 Surface까지
+        /// 확장될 수 있으므로 이 값은 Patch 전체의 Surface가 아니라 <b>seed의 Surface</b>입니다.
+        /// 각 Face가 속한 Surface는 <see cref="SurfacePatchTriangle.Surface"/>에 있습니다.
+        /// </summary>
         public SurfaceHandle Surface { get; }
+        /// <summary>이 chart가 둘 이상의 Surface에 걸쳐 있는지 가져옵니다.</summary>
+        public bool SpansMultipleSurfaces { get; }
         /// <summary>펼침을 시작한 Seed Triangle index를 가져옵니다.</summary>
         public int SeedTriangleIndex { get; }
         /// <summary>이 local chart에서 펼친 모든 Face를 가져옵니다.</summary>
@@ -54,9 +60,21 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                 throw new ArgumentException("A patch must contain at least its seed face.", nameof(triangles));
             _trianglesView = Array.AsReadOnly(_triangles);
             IntrinsicBounds = CalculateBounds(_triangles);
+            SpansMultipleSurfaces = HasMultipleSurfaces(_triangles);
             MaximumClosureError = maximumClosureError;
             WasTruncated = wasTruncated;
             ClosureToleranceExceeded = closureToleranceExceeded;
+        }
+
+        /// <summary>펼친 Face 중 seed와 다른 Surface에 속한 것이 있는지 검사합니다.</summary>
+        private static bool HasMultipleSurfaces(SurfacePatchTriangle[] triangles)
+        {
+            SurfaceHandle first = triangles[0].Surface;
+            foreach (SurfacePatchTriangle triangle in triangles)
+            {
+                if (triangle.Surface != first) return true;
+            }
+            return false;
         }
 
         /// <summary>펼친 Face 꼭짓점 전체를 감싸는 축 정렬 경계를 계산합니다.</summary>

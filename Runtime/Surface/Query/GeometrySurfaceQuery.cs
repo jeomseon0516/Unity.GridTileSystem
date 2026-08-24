@@ -11,7 +11,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Query
     /// <see cref="SurfacePoint"/>를 찾습니다. Grid는 이 결과만 받으며 어떤 Unity 타입이 쓰였는지
     /// 알지 못합니다.
     /// </summary>
-    public sealed class GeometrySurfaceQuery : ISurfaceQuery, ISurfaceProvider
+    public sealed class GeometrySurfaceQuery : ISurfaceQuery, ISurfaceProvider, ISurfaceDiscovery
     {
         /// <summary>월드에서 후보 GameObject를 모으는 계층입니다.</summary>
         private readonly ISurfaceCandidateSource _candidates;
@@ -21,6 +21,8 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Query
         private readonly Dictionary<SurfaceHandle, SurfaceTopology> _topologies = new();
         /// <summary>같은 GameObject를 다시 만나면 Adapter와 handle을 재사용하기 위한 캐시입니다.</summary>
         private readonly Dictionary<GameObject, ISurfaceAdapter> _adapters = new();
+        /// <summary>handle에서 Adapter를 되찾기 위한 역방향 조회입니다.</summary>
+        private readonly Dictionary<SurfaceHandle, ISurfaceAdapter> _adaptersByHandle = new();
         /// <summary>후보 수집 결과를 재사용하는 버퍼입니다.</summary>
         private readonly List<GameObject> _candidateBuffer = new();
         /// <summary>다음에 발급할 Surface 식별자입니다.</summary>
@@ -76,11 +78,29 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Query
         public bool TryGetTopology(SurfaceHandle handle, out SurfaceTopology topology) =>
             _topologies.TryGetValue(handle, out topology);
 
+        /// <inheritdoc />
+        public bool TryGetAdapter(SurfaceHandle surface, out ISurfaceAdapter adapter) =>
+            _adaptersByHandle.TryGetValue(surface, out adapter);
+
+        /// <inheritdoc />
+        public int Discover(in Vector3 worldPosition, float radius, LayerMask layerMask, List<ISurfaceAdapter> results)
+        {
+            if (results == null) throw new ArgumentNullException(nameof(results));
+            results.Clear();
+            _candidates.Collect(worldPosition, radius, layerMask, _candidateBuffer);
+            foreach (GameObject candidate in _candidateBuffer)
+            {
+                if (TryPrepare(candidate, out ISurfaceAdapter adapter, out _)) results.Add(adapter);
+            }
+            return results.Count;
+        }
+
         /// <summary>이번 질의 세션에서 캐시한 Adapter와 topology를 모두 해제합니다.</summary>
         public void Clear()
         {
             foreach (ISurfaceAdapter adapter in _adapters.Values) adapter.Dispose();
             _adapters.Clear();
+            _adaptersByHandle.Clear();
             _topologies.Clear();
         }
 
@@ -120,6 +140,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Query
             // handle을 실제로 소비했을 때만 증가시켜 실패한 후보가 식별자를 낭비하지 않게 합니다.
             _nextHandle++;
             _adapters[candidate] = adapter;
+            _adaptersByHandle[handle] = adapter;
             _topologies[handle] = topology;
             return true;
         }

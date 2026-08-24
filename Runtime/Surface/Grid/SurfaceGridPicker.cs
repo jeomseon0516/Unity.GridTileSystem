@@ -22,8 +22,20 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
                 : throw new ArgumentNullException(nameof(surfaceCollider));
             _topology = topology ?? throw new ArgumentNullException(nameof(topology));
             _grid = grid ?? throw new ArgumentNullException(nameof(grid));
-            if (_grid.Patch.Surface != _topology.Handle)
-                throw new ArgumentException("Grid belongs to another surface topology.", nameof(grid));
+            // chart는 연결을 건너 여러 Surface에 걸칠 수 있습니다. picking은 이 Collider가 속한
+            // Surface의 Tile만 해석하면 되므로, 그 Surface가 chart에 포함되어 있는지만 확인합니다.
+            if (!ContainsSurface(_grid.Patch, _topology.Handle))
+                throw new ArgumentException("Grid does not cover the supplied surface topology.", nameof(grid));
+        }
+
+        /// <summary>chart에 지정한 Surface의 Face가 하나라도 포함되어 있는지 검사합니다.</summary>
+        private static bool ContainsSurface(SurfacePatch patch, SurfaceHandle surface)
+        {
+            foreach (SurfacePatchTriangle triangle in patch.Triangles)
+            {
+                if (triangle.Surface == surface) return true;
+            }
+            return false;
         }
 
         /// <summary>Ray가 원본 Surface의 활성 Tile과 교차하면 해당 hit와 Tile Region을 반환합니다.</summary>

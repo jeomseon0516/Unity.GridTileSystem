@@ -19,10 +19,15 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
         private readonly ISurfaceQuery _query;
         /// <summary>handle로 topology를 되찾는 계층입니다.</summary>
         private readonly ISurfaceProvider _surfaces;
+        /// <summary>경계 너머로 chart를 잇는 계층입니다. null이면 chart가 seed Surface에서 멈춥니다.</summary>
+        private readonly ISurfaceConnectivity _connectivity;
         /// <summary>기본 구성에서 이 시스템이 직접 만들어 수명을 책임지는 query입니다.</summary>
         private readonly GeometrySurfaceQuery _ownedQuery;
 
-        /// <summary>기본 Physics 후보 수집과 기본 Adapter 목록으로 시스템을 만듭니다.</summary>
+        /// <summary>
+        /// 기본 Physics 후보 수집과 기본 Adapter 목록으로 시스템을 만듭니다. 경계 연결도 함께
+        /// 구성되므로 Grid가 이어지는 Surface까지 자연스럽게 확장됩니다.
+        /// </summary>
         public SurfaceGridSystem() : this(new GeometrySurfaceQuery())
         {
         }
@@ -33,13 +38,24 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             _ownedQuery = query ?? throw new ArgumentNullException(nameof(query));
             _query = query;
             _surfaces = query;
+            _connectivity = new GeometrySurfaceConnectivity(query, query);
         }
 
         /// <summary>질의와 provider를 각각 주입합니다. 수명은 호출자가 관리합니다.</summary>
         public SurfaceGridSystem(ISurfaceQuery query, ISurfaceProvider surfaces)
+            : this(query, surfaces, null)
+        {
+        }
+
+        /// <summary>
+        /// 질의, provider와 경계 연결 계층을 각각 주입합니다. 연결 계층이 <see langword="null"/>이면
+        /// chart는 seed Surface 안에서만 확장됩니다.
+        /// </summary>
+        public SurfaceGridSystem(ISurfaceQuery query, ISurfaceProvider surfaces, ISurfaceConnectivity connectivity)
         {
             _query = query ?? throw new ArgumentNullException(nameof(query));
             _surfaces = surfaces ?? throw new ArgumentNullException(nameof(surfaces));
+            _connectivity = connectivity;
             _ownedQuery = null;
         }
 
@@ -61,7 +77,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             try
             {
                 grid = SurfaceGridBuilder.Build(
-                    _surfaces, hit.Point, request.TileRadius, request.PatchSettings, surfaceDirection);
+                    _surfaces, hit.Point, request.TileRadius, request.PatchSettings, surfaceDirection, _connectivity);
             }
             catch (ArgumentException exception)
             {

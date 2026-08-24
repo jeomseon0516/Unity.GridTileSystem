@@ -8,6 +8,11 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
     /// 공유 Edge를 축으로 인접 Triangle을 강체처럼 펼쳐 local intrinsic chart를 구축합니다.
     /// 각각의 Triangle은 원본 Edge 길이 세 개를 모두 보존합니다.
     /// </summary>
+    /// <remarks>
+    /// <see cref="ISurfaceConnectivity"/>를 함께 주면 Surface boundary에서 멈추지 않고 이어지는 다른
+    /// Surface의 Face를 같은 chart에 계속 펼칩니다. 연결을 건너도 같은 코사인 법칙과 두 원 교차
+    /// 연산을 그대로 적용하므로 tangent가 자동으로 이어지며 별도의 transport 수학이 필요 없습니다.
+    /// </remarks>
     public static class TriangleUnfoldingParameterizer
     {
         /// <summary>수치적으로 0인 기준선으로 나누는 것을 막는 최소 유효 Edge 길이입니다.</summary>
@@ -31,7 +36,8 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             if (topology == null) throw new ArgumentNullException(nameof(topology));
             if (!seed.IsValid || seed.Surface != topology.Handle)
                 throw new ArgumentException("Seed must be a valid point on the supplied topology.", nameof(seed));
-            return BuildInternal(topology, seed.TriangleIndex, settings, seed.Barycentric);
+            return BuildInternal(
+                new SingleSurfaceProvider(topology), seed.Surface, seed.TriangleIndex, settings, seed.Barycentric, null);
         }
 
         /// <summary>
@@ -42,26 +48,49 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             SurfaceTopology topology,
             int seedTriangleIndex,
             in SurfacePatchBuildSettings settings)
-            => BuildInternal(topology, seedTriangleIndex, settings, null);
+        {
+            if (topology == null) throw new ArgumentNullException(nameof(topology));
+            return BuildInternal(
+                new SingleSurfaceProvider(topology), topology.Handle, seedTriangleIndex, settings, null, null);
+        }
+
+        /// <summary>
+        /// Surface를 handle로 조회하는 provider와 선택적 연결 계층으로 chart를 만듭니다. 연결 계층이
+        /// 있으면 chart가 seed Surface 경계를 넘어 이어지는 Surface까지 확장됩니다.
+        /// </summary>
+        public static SurfacePatch Build(
+            ISurfaceProvider surfaces,
+            in SurfacePoint seed,
+            in SurfacePatchBuildSettings settings,
+            ISurfaceConnectivity connectivity)
+        {
+            if (surfaces == null) throw new ArgumentNullException(nameof(surfaces));
+            if (!seed.IsValid) throw new ArgumentException("Seed must be a valid surface point.", nameof(seed));
+            return BuildInternal(surfaces, seed.Surface, seed.TriangleIndex, settings, seed.Barycentric, connectivity);
+        }
 
         /// <summary>공개 overload의 검증과 radius 원점 정책을 공유하는 실제 펼침 구현입니다.</summary>
         private static SurfacePatch BuildInternal(
-            SurfaceTopology topology,
+            ISurfaceProvider surfaces,
+            SurfaceHandle seedSurface,
             int seedTriangleIndex,
             in SurfacePatchBuildSettings settings,
-            Vector3? seedBarycentric)
+            Vector3? seedBarycentric,
+            ISurfaceConnectivity connectivity)
         {
-            if (topology == null) throw new ArgumentNullException(nameof(topology));
-            if ((uint)seedTriangleIndex >= (uint)topology.Triangles.Count)
+            if (surfaces == null) throw new ArgumentNullException(nameof(surfaces));
+            if (!surfaces.TryGetTopology(seedSurface, out SurfaceTopology seedTopology))
+                throw new ArgumentException("Seed surface is not available from the provider.", nameof(seedSurface));
+            if ((uint)seedTriangleIndex >= (uint)seedTopology.Triangles.Count)
                 throw new ArgumentOutOfRangeException(nameof(seedTriangleIndex));
-            if (!topology.IsTriangleTraversable(seedTriangleIndex))
+            if (!seedTopology.IsTriangleTraversable(seedTriangleIndex))
                 throw new ArgumentException("Seed triangle is not traversable.", nameof(seedTriangleIndex));
 
-            Dictionary<int, SurfacePatchTriangle> unfolded = new();
+            Dictionary<(SurfaceHandle Surface, int TriangleIndex), SurfacePatchTriangle> unfolded = new();
             List<SurfacePatchTriangle> acceptedTriangles = new();
-            Queue<int> pending = new();
-            SurfacePatchTriangle seedTriangle = UnfoldSeed(topology, seedTriangleIndex);
-            unfolded.Add(seedTriangleIndex, seedTriangle);
+            Queue<(SurfaceHandle Surface, int TriangleIndex)> pending = new();
+            SurfacePatchTriangle seedTriangle = UnfoldSeed(seedTopology, seedTriangleIndex);
+            unfolded.Add((seedSurface, seedTriangleIndex), seedTriangle);
             acceptedTriangles.Add(seedTriangle);
             // SurfacePoint overload는 실제 seed를, Triangle index overload는 Face 무게중심을 radius
             // 원점으로 씁니다. chart의 임의 좌표 원점(A corner)에 의존하면 같은 Patch라도 seed 위치에
@@ -71,7 +100,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                   seedTriangle.B * seedBarycentric.Value.y +
                   seedTriangle.C * seedBarycentric.Value.z
                 : (seedTriangle.A + seedTriangle.B + seedTriangle.C) / 3f;
-            pending.Enqueue(seedTriangleIndex);
+            pending.Enqueue((seedSurface, seedTriangleIndex));
             float maximumClosureError = 0f;
             bool wasTruncated = false;
             bool closureToleranceExceeded = false;
@@ -79,17 +108,30 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
 
             while (pending.Count > 0)
             {
-                int currentIndex = pending.Dequeue();
-                SurfacePatchTriangle current = unfolded[currentIndex];
-                SurfaceTriangleAdjacency adjacency = topology.Adjacency[currentIndex];
+                (SurfaceHandle currentSurface, int currentIndex) = pending.Dequeue();
+                SurfacePatchTriangle current = unfolded[(currentSurface, currentIndex)];
+                if (!surfaces.TryGetTopology(currentSurface, out SurfaceTopology currentTopology)) continue;
+                SurfaceTriangleAdjacency adjacency = currentTopology.Adjacency[currentIndex];
 
                 for (int edge = 0; edge < 3; edge++)
                 {
-                    int neighborIndex = adjacency.GetNeighbor(edge);
-                    if (neighborIndex < 0 || !topology.IsTriangleTraversable(neighborIndex)) continue;
+                    if (!TryUnfoldAcrossEdge(
+                            surfaces,
+                            connectivity,
+                            currentTopology,
+                            currentSurface,
+                            current,
+                            adjacency.GetNeighbor(edge),
+                            edge,
+                            out SurfaceHandle neighborSurface,
+                            out int neighborIndex,
+                            out SurfacePatchTriangle candidate))
+                    {
+                        continue;
+                    }
 
-                    SurfacePatchTriangle candidate = UnfoldNeighbor(topology, current, edge, neighborIndex);
-                    if (!unfolded.TryGetValue(neighborIndex, out SurfacePatchTriangle existing))
+                    (SurfaceHandle, int) neighborKey = (neighborSurface, neighborIndex);
+                    if (!unfolded.TryGetValue(neighborKey, out SurfacePatchTriangle existing))
                     {
                         Vector2 centroid = (candidate.A + candidate.B + candidate.C) / 3f;
                         if (acceptedTriangleCount >= settings.MaximumTriangleCount ||
@@ -101,10 +143,10 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                             continue;
                         }
 
-                        unfolded.Add(neighborIndex, candidate);
+                        unfolded.Add(neighborKey, candidate);
                         acceptedTriangles.Add(candidate);
                         acceptedTriangleCount++;
-                        pending.Enqueue(neighborIndex);
+                        pending.Enqueue((neighborSurface, neighborIndex));
                         continue;
                     }
 
@@ -120,12 +162,55 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             }
 
             return new SurfacePatch(
-                topology.Handle,
+                seedSurface,
                 seedTriangleIndex,
                 acceptedTriangles.ToArray(),
                 maximumClosureError,
                 wasTruncated,
                 closureToleranceExceeded);
+        }
+
+        /// <summary>
+        /// 한 Edge 너머의 Face를 chart 좌표로 배치합니다. 같은 Surface의 인접 Face면 adjacency를,
+        /// boundary Edge(<paramref name="neighborIndex"/>가 음수)면 연결 계층을 사용합니다.
+        /// </summary>
+        private static bool TryUnfoldAcrossEdge(
+            ISurfaceProvider surfaces,
+            ISurfaceConnectivity connectivity,
+            SurfaceTopology currentTopology,
+            SurfaceHandle currentSurface,
+            in SurfacePatchTriangle current,
+            int neighborIndex,
+            int edge,
+            out SurfaceHandle neighborSurface,
+            out int resolvedNeighborIndex,
+            out SurfacePatchTriangle candidate)
+        {
+            neighborSurface = default;
+            resolvedNeighborIndex = -1;
+            candidate = default;
+
+            if (neighborIndex >= 0)
+            {
+                if (!currentTopology.IsTriangleTraversable(neighborIndex)) return false;
+                neighborSurface = currentSurface;
+                resolvedNeighborIndex = neighborIndex;
+                candidate = UnfoldNeighbor(currentTopology, current, edge, neighborIndex);
+                return true;
+            }
+
+            // neighborIndex가 음수라는 것이 곧 boundary Edge입니다. 별도 감지 로직이 필요 없습니다.
+            if (connectivity == null) return false;
+            if (!connectivity.TryGetLink(currentSurface, current.TriangleIndex, edge, out SurfaceLink link)) return false;
+            if (!link.IsValid || link.ToSurface == currentSurface && link.ToTriangleIndex == current.TriangleIndex) return false;
+            if (!surfaces.TryGetTopology(link.ToSurface, out SurfaceTopology neighborTopology)) return false;
+            if ((uint)link.ToTriangleIndex >= (uint)neighborTopology.Triangles.Count) return false;
+            if (!neighborTopology.IsTriangleTraversable(link.ToTriangleIndex)) return false;
+
+            neighborSurface = link.ToSurface;
+            resolvedNeighborIndex = link.ToTriangleIndex;
+            candidate = UnfoldAcrossLink(neighborTopology, current, edge, link);
+            return true;
         }
 
         /// <summary>코사인 법칙으로 Edge 길이 세 개를 보존하며 Seed Face를 2D에 배치합니다.</summary>
@@ -154,10 +239,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                 new Vector2(cx, Mathf.Sqrt(Mathf.Max(0f, cySquared))));
         }
 
-        /// <summary>
-        /// 이미 펼쳐진 공유 Edge 양 끝을 중심으로 하는 두 원의 교점으로 인접 Face를 배치합니다.
-        /// 두 교점 중 현재 Face의 반대편에 있는 해를 선택합니다.
-        /// </summary>
+        /// <summary>같은 Surface의 인접 Face를 공유 vertex 대응으로 배치합니다.</summary>
         private static SurfacePatchTriangle UnfoldNeighbor(
             SurfaceTopology topology,
             in SurfacePatchTriangle current,
@@ -166,22 +248,69 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
         {
             SurfaceTriangle currentTriangle = topology.Triangles[current.TriangleIndex];
             currentTriangle.GetEdge(currentEdge, out int sharedStartVertex, out int sharedEndVertex);
-            int currentStartCorner = FindCorner(currentTriangle, sharedStartVertex);
-            int currentEndCorner = FindCorner(currentTriangle, sharedEndVertex);
+            SurfaceTriangle neighbor = topology.Triangles[neighborIndex];
+            return PlaceAcrossEdge(
+                topology,
+                topology.Handle,
+                neighborIndex,
+                current,
+                currentEdge,
+                FindCorner(neighbor, sharedStartVertex),
+                FindCorner(neighbor, sharedEndVertex));
+        }
+
+        /// <summary>연결 너머 다른 Surface의 Face를 Edge 파라미터 대응으로 배치합니다.</summary>
+        private static SurfacePatchTriangle UnfoldAcrossLink(
+            SurfaceTopology neighborTopology,
+            in SurfacePatchTriangle current,
+            int currentEdge,
+            in SurfaceLink link)
+        {
+            // Edge e는 corner e에서 시작해 corner (e+1)%3에서 끝납니다.
+            int toStartCorner = link.ToEdge;
+            int toEndCorner = (link.ToEdge + 1) % 3;
+            // ReverseParameter면 출발 Edge의 시작점이 도착 Edge의 끝점과 같은 위치입니다.
+            return PlaceAcrossEdge(
+                neighborTopology,
+                link.ToSurface,
+                link.ToTriangleIndex,
+                current,
+                currentEdge,
+                link.ReverseParameter ? toEndCorner : toStartCorner,
+                link.ReverseParameter ? toStartCorner : toEndCorner);
+        }
+
+        /// <summary>
+        /// 이미 펼쳐진 공유 Edge 양 끝을 중심으로 하는 두 원의 교점으로 다음 Face를 배치합니다.
+        /// 두 교점 중 현재 Face의 반대편에 있는 해를 선택합니다. 같은 Surface든 연결 너머든 연산은
+        /// 동일하며, 어느 corner가 Edge 양 끝에 대응하는지만 호출자가 정합니다.
+        /// </summary>
+        private static SurfacePatchTriangle PlaceAcrossEdge(
+            SurfaceTopology neighborTopology,
+            SurfaceHandle neighborSurface,
+            int neighborIndex,
+            in SurfacePatchTriangle current,
+            int currentEdge,
+            int neighborStartCorner,
+            int neighborEndCorner)
+        {
+            if (neighborStartCorner == neighborEndCorner) throw DegenerateTriangle(neighborIndex);
+
+            // Edge e의 양 끝은 corner e와 (e+1)%3이므로 현재 Face의 corner는 조회 없이 결정됩니다.
+            int currentStartCorner = currentEdge;
+            int currentEndCorner = (currentEdge + 1) % 3;
             int currentOppositeCorner = 3 - currentStartCorner - currentEndCorner;
             Vector2 u2 = current.GetCorner(currentStartCorner);
             Vector2 v2 = current.GetCorner(currentEndCorner);
             Vector2 currentOpposite = current.GetCorner(currentOppositeCorner);
 
-            SurfaceTriangle neighbor = topology.Triangles[neighborIndex];
-            int neighborStartCorner = FindCorner(neighbor, sharedStartVertex);
-            int neighborEndCorner = FindCorner(neighbor, sharedEndVertex);
             int neighborOppositeCorner = 3 - neighborStartCorner - neighborEndCorner;
-            int oppositeVertex = neighbor.GetVertex(neighborOppositeCorner);
-            float radiusU = Vector3.Distance(
-                topology.Positions[sharedStartVertex], topology.Positions[oppositeVertex]);
-            float radiusV = Vector3.Distance(
-                topology.Positions[sharedEndVertex], topology.Positions[oppositeVertex]);
+            SurfaceTriangle neighbor = neighborTopology.Triangles[neighborIndex];
+            Vector3 startPosition = neighborTopology.Positions[neighbor.GetVertex(neighborStartCorner)];
+            Vector3 endPosition = neighborTopology.Positions[neighbor.GetVertex(neighborEndCorner)];
+            Vector3 oppositePosition = neighborTopology.Positions[neighbor.GetVertex(neighborOppositeCorner)];
+            float radiusU = Vector3.Distance(startPosition, oppositePosition);
+            float radiusV = Vector3.Distance(endPosition, oppositePosition);
 
             Vector2 edgeVector = v2 - u2;
             float edgeLength = edgeVector.magnitude;
@@ -211,7 +340,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             corners[neighborStartCorner] = u2;
             corners[neighborEndCorner] = v2;
             corners[neighborOppositeCorner] = opposite2;
-            return new SurfacePatchTriangle(topology.Handle, neighborIndex, corners[0], corners[1], corners[2]);
+            return new SurfacePatchTriangle(neighborSurface, neighborIndex, corners[0], corners[1], corners[2]);
         }
 
         /// <summary>원본 vertex index를 포함하는 Triangle local corner를 찾습니다.</summary>

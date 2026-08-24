@@ -13,7 +13,9 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             out Vector2 intrinsicPosition)
         {
             if (patch == null) throw new ArgumentNullException(nameof(patch));
-            if (!point.IsValid || point.Surface != patch.Surface)
+            // chart가 연결을 건너 여러 Surface에 걸칠 수 있으므로 Patch 전체가 아니라 Face 단위로
+            // Surface identity를 대조합니다.
+            if (!point.IsValid)
             {
                 intrinsicPosition = default;
                 return false;

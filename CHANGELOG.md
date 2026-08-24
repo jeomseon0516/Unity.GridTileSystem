@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+- Grid가 Surface 경계를 넘어 이어지도록 chart 확장을 추가했습니다. `ISurfaceConnectivity`와
+  `SurfaceLink`가 boundary Edge 너머의 Surface Edge를 표현하고, `TriangleUnfoldingParameterizer`가
+  `ISurfaceProvider`와 연결 계층을 받아 여러 Surface의 Face를 하나의 chart에 계속 펼칩니다. 연결을
+  건너도 같은 코사인 법칙과 두 원 교차 연산을 그대로 쓰므로 tangent가 자동으로 이어집니다.
+- `GeometrySurfaceConnectivity`를 추가했습니다. boundary Edge의 월드 끝점이 허용 오차 안에서
+  일치하고 두 Face 법선이 정합할 때만 연결로 인정하므로, 가깝지만 무관한 표면이나 같은 경계를
+  공유하되 반대를 향하는 표면(벽과 그 뒷면)은 연결되지 않습니다. Surface마다 boundary Edge 공간
+  색인을 한 번만 만들고 Edge별 질의 결과는 "연결 없음"까지 캐시합니다.
+- `SurfacePatch.Surface`의 의미를 **seed Surface**로 좁히고 `SpansMultipleSurfaces`를 추가했습니다.
+  Face별 Surface identity는 `SurfacePatchTriangle.Surface`에 있습니다.
+- `SurfaceRegionBuilder`가 topology 없이 Patch만으로 Region을 만드는 overload를 제공합니다. Region
+  vertex는 Face가 실제로 속한 Surface를 가리키므로 여러 Surface에 걸친 Tile도 올바르게 복원됩니다.
+- `SurfaceGridSystem` 기본 구성이 경계 연결을 포함합니다. 연결 계층을 `null`로 주입하면 chart가
+  seed Surface 안에서만 확장되는 기존 동작이 유지됩니다.
+- 여러 Surface에 걸친 Grid를 `SurfaceGridGeometryBuilder`에 넘기면 명시적으로 거부합니다. Surface마다
+  local-to-world 변환이 다르므로 하나의 출력 Mesh로 합치려면 Surface별 변환이 필요하며, 조용히 잘못된
+  Geometry를 만드는 대신 실패로 알립니다.
+
 - Grid 격자에 회전을 도입했습니다. `IntrinsicHexLayout`이 chart 원점 기준 회전각을 받으며,
   `IntrinsicHexLayout.FromDirection`은 chart 방향 벡터를 첫 Hex 꼭짓점 방향으로 삼습니다. 회전각
   기본값은 0이고 그때의 중심·꼭짓점·좌표 변환 결과는 회전 도입 전과 동일합니다.
