@@ -35,6 +35,9 @@
 - [x] Basic Usage Sample을 Source MeshCollider + Output MeshRenderer 구성으로 교체
 - [x] TerrainData 기반 Terrain Usage Sample Scene과 Bake 검증
 - [x] non-manifold traversal boundary, Surface snapshot 혼용 및 비유한 입력 방어 테스트
+- [x] chart 원점 기준 격자 회전(`IntrinsicHexLayout.Rotation`)과 회전한 격자의 경계 구간 산출
+- [x] Surface local 방향을 chart 방향으로 옮기는 `SurfaceChartDirection`
+- [x] 월드 seed 위치 하나로 Grid를 만드는 `SurfaceGridRequest`/`SurfaceGridSystem`과 상태 기반 실패 진단
 
 ## 안정화 게이트
 

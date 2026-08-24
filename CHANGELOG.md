@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+- Grid 격자에 회전을 도입했습니다. `IntrinsicHexLayout`이 chart 원점 기준 회전각을 받으며,
+  `IntrinsicHexLayout.FromDirection`은 chart 방향 벡터를 첫 Hex 꼭짓점 방향으로 삼습니다. 회전각
+  기본값은 0이고 그때의 중심·꼭짓점·좌표 변환 결과는 회전 도입 전과 동일합니다.
+- 격자 열/행 구간 계산을 `SurfaceGridBuilder`에서 `IntrinsicHexLayout`으로 옮겼습니다. 회전이 있으면
+  Patch 경계를 격자 좌표계로 역회전한 AABB에서 구간을 구하므로 회전한 격자에서도 경계 Tile을
+  빠뜨리지 않습니다.
+- `SurfaceChartDirection`을 추가했습니다. Surface local 3D 방향을 seed Face의 chart 2D 방향으로
+  옮기며, 표면 법선과 나란해 격자 방향을 정의할 수 없는 입력은 조용히 무시하지 않고 실패로 알립니다.
+- `SurfaceGridRequest`와 `SurfaceGridSystem`을 추가했습니다. 사용자는 **월드 seed 위치와 Tile 해상도만**
+  지정하고 시스템이 주변 표면을 스스로 찾아 Grid를 만듭니다. Surface를 등록하거나 목록으로 전달하거나
+  Triangle index를 입력하는 단계는 없습니다. 선택적으로 월드 초기 방향을 주면 seed 표면의 접평면에
+  투영되어 격자 회전이 됩니다.
+- `SurfaceGridBuildResult`/`SurfaceGridBuildStatus`로 실패 원인을 구분해 알립니다. 표면 미발견,
+  초기 방향 불가, 구축 실패, 완전한 Tile 없음을 각각 진단 문자열과 함께 반환하며 예외를 던지지 않습니다.
+
 - Skinned Mesh 변형 추종을 추가했습니다. `SurfaceReceiverKind.SkinnedMesh` Receiver는 bind pose Mesh로
   topology를 만들고, Grid vertex마다 소속 Triangle 세 정점의 bone 가중치를 barycentric으로 보간해
   같은 bone index끼리 합산·정규화한 `SurfaceSkinBinding`을 Bake 시점에 한 번 만듭니다. 이후에는
