@@ -23,8 +23,7 @@ namespace Jeomseon.Unity.GridTileSystem.Samples.TerrainUsage
             }
             Color even = new(0.95f, 0.55f, 0.12f, 0.85f);
             Color odd = new(0.95f, 0.85f, 0.2f, 0.85f);
-            foreach (HexGridReceiver receiver in gridController.Receivers)
-            foreach (HexTile tile in receiver.Tiles)
+            foreach (HexTile tile in gridController.Tiles)
             {
                 int parity = (tile.Coordinates.Q - tile.Coordinates.R) & 1;
                 tile.Data.Color = parity == 0 ? even : odd;

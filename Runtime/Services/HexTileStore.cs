@@ -42,8 +42,19 @@ namespace Jeomseon.Unity.GridTileSystem.Services
         public void Bake(SurfaceTopology topology, SurfaceGrid grid, Transform surfaceTransform)
         {
             if (topology == null) throw new ArgumentNullException(nameof(topology));
-            if (grid == null) throw new ArgumentNullException(nameof(grid));
             if (surfaceTransform == null) throw new ArgumentNullException(nameof(surfaceTransform));
+            Bake(new SingleSurfaceProvider(topology), new FixedSurfaceTransform(topology.Handle, surfaceTransform), grid);
+        }
+
+        /// <summary>
+        /// 여러 Surface에 걸친 Grid로 Tile 목록을 재구축합니다. Tile 중심은 Region vertex마다 자기
+        /// Surface의 topology와 변환으로 월드 위치를 구한 뒤 평균한 값입니다.
+        /// </summary>
+        public void Bake(ISurfaceProvider surfaces, ISurfaceTransformSource transforms, SurfaceGrid grid)
+        {
+            if (surfaces == null) throw new ArgumentNullException(nameof(surfaces));
+            if (transforms == null) throw new ArgumentNullException(nameof(transforms));
+            if (grid == null) throw new ArgumentNullException(nameof(grid));
             RebuildLookup();
             Dictionary<AxialCoordinates, HexTile> previousTiles = new(_lookup);
             UnsubscribeFromTiles();
@@ -52,15 +63,19 @@ namespace Jeomseon.Unity.GridTileSystem.Services
 
             foreach (SurfaceGridTileRegion tileRegion in grid.Tiles)
             {
-                // Logical 중심이 여러 Face에 걸칠 수 있으므로 Region vertex의 Surface 위치 평균을
-                // 표시용 TilePosition으로 사용합니다. Picking과 identity는 이 근사 위치에 의존하지 않습니다.
-                Vector3 localCenter = Vector3.zero;
+                // Logical 중심이 여러 Face에 걸칠 수 있으므로 Region vertex의 월드 위치 평균을 표시용
+                // TilePosition으로 사용합니다. Picking과 identity는 이 근사 위치에 의존하지 않습니다.
+                Vector3 worldCenter = Vector3.zero;
                 foreach (SurfaceRegionVertex vertex in tileRegion.Region.Vertices)
                 {
-                    localCenter += topology.Evaluate(vertex.SurfacePoint);
+                    SurfaceHandle surface = vertex.SurfacePoint.Surface;
+                    if (!surfaces.TryGetTopology(surface, out SurfaceTopology vertexTopology))
+                        throw new ArgumentException($"Surface {surface} is not available from the provider.", nameof(surfaces));
+                    if (!transforms.TryGetSurfaceToWorld(surface, out Matrix4x4 surfaceToWorld))
+                        throw new ArgumentException($"Surface {surface} has no world transform.", nameof(transforms));
+                    worldCenter += surfaceToWorld.MultiplyPoint3x4(vertexTopology.Evaluate(vertex.SurfacePoint));
                 }
-                localCenter /= tileRegion.Region.Vertices.Count;
-                Vector3 worldCenter = surfaceTransform.TransformPoint(localCenter);
+                worldCenter /= tileRegion.Region.Vertices.Count;
                 HexCoordinates coordinates = tileRegion.Coordinates;
                 AxialCoordinates key = coordinates;
                 // Bake 순서 인덱스는 생성 Geometry의 Tile index와 같은 순서를 유지해야 합니다.
@@ -79,6 +94,27 @@ namespace Jeomseon.Unity.GridTileSystem.Services
             }
 
             TileVisualsChanged?.Invoke();
+        }
+
+        /// <summary>단일 Surface Transform을 변환 조회 계약으로 감쌉니다.</summary>
+        private sealed class FixedSurfaceTransform : ISurfaceTransformSource
+        {
+            private readonly SurfaceHandle _surface;
+            private readonly Transform _transform;
+
+            public FixedSurfaceTransform(SurfaceHandle surface, Transform transform)
+            {
+                _surface = surface;
+                _transform = transform;
+            }
+
+            public bool TryGetSurfaceToWorld(SurfaceHandle surface, out Matrix4x4 surfaceToWorld)
+            {
+                surfaceToWorld = Matrix4x4.identity;
+                if (surface != _surface || _transform == null) return false;
+                surfaceToWorld = _transform.localToWorldMatrix;
+                return true;
+            }
         }
 
         /// <summary>모든 타일과 lookup을 비우고 시각 상태 변경을 알립니다.</summary>

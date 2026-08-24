@@ -11,7 +11,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Query
     /// <see cref="SurfacePoint"/>를 찾습니다. Grid는 이 결과만 받으며 어떤 Unity 타입이 쓰였는지
     /// 알지 못합니다.
     /// </summary>
-    public sealed class GeometrySurfaceQuery : ISurfaceQuery, ISurfaceProvider, ISurfaceDiscovery
+    public sealed class GeometrySurfaceQuery : ISurfaceQuery, ISurfaceProvider, ISurfaceDiscovery, ISurfaceTransformSource
     {
         /// <summary>월드에서 후보 GameObject를 모으는 계층입니다.</summary>
         private readonly ISurfaceCandidateSource _candidates;
@@ -81,6 +81,17 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Query
         /// <inheritdoc />
         public bool TryGetAdapter(SurfaceHandle surface, out ISurfaceAdapter adapter) =>
             _adaptersByHandle.TryGetValue(surface, out adapter);
+
+        /// <inheritdoc />
+        public bool TryGetSurfaceToWorld(SurfaceHandle surface, out Matrix4x4 surfaceToWorld)
+        {
+            surfaceToWorld = Matrix4x4.identity;
+            if (!_adaptersByHandle.TryGetValue(surface, out ISurfaceAdapter adapter)) return false;
+            Transform surfaceTransform = adapter != null ? adapter.SurfaceTransform : null;
+            // Transform이 없으면 topology가 이미 월드 기준이라는 계약이므로 항등 변환을 씁니다.
+            if (surfaceTransform != null) surfaceToWorld = surfaceTransform.localToWorldMatrix;
+            return true;
+        }
 
         /// <inheritdoc />
         public int Discover(in Vector3 worldPosition, float radius, LayerMask layerMask, List<ISurfaceAdapter> results)

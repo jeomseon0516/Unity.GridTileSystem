@@ -144,6 +144,59 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             }
         }
 
+        [Test]
+        public void Patch_ChainedSurfaces_ReachesEveryLinkedSurfaceWithoutBeingListed()
+        {
+            // S-F: 세 Surface 중 어느 것도 요청에 없습니다. 경계에 도달할 때마다 다음 것을 발견합니다.
+            StubWorld world = StubWorld.CreateChain(3);
+            GeometrySurfaceConnectivity connectivity = new(world, world);
+            SurfacePoint seed = new(world.Chain[0], 0, new Vector3(0.5f, 0.25f, 0.25f));
+
+            SurfacePatch patch = TriangleUnfoldingParameterizer.Build(
+                world, seed, SurfacePatchBuildSettings.Unlimited, connectivity);
+
+            HashSet<SurfaceHandle> reached = new(patch.Triangles.Select(triangle => triangle.Surface));
+            Assert.That(patch.Triangles.Count, Is.EqualTo(6));
+            Assert.That(reached, Is.EquivalentTo(world.Chain));
+            Assert.That(patch.IntrinsicBounds.width, Is.EqualTo(6f).Within(0.001f));
+        }
+
+        [Test]
+        public void Patch_LimitedGrowth_NeverTouchesSurfacesItDoesNotReach()
+        {
+            // S-I의 lazy 절반: 성장이 멈춘 뒤의 Surface는 topology조차 만들지 않아야 합니다.
+            StubWorld world = StubWorld.CreateChain(3);
+            GeometrySurfaceConnectivity connectivity = new(world, world);
+            SurfacePoint seed = new(world.Chain[0], 0, new Vector3(0.5f, 0.25f, 0.25f));
+            SurfacePatchBuildSettings limited = new(2, 100f, 1f);
+
+            SurfacePatch patch = TriangleUnfoldingParameterizer.Build(world, seed, limited, connectivity);
+
+            Assert.That(patch.WasTruncated, Is.True);
+            Assert.That(patch.SpansMultipleSurfaces, Is.False);
+            Assert.That(world.TopologyRequests(world.Chain[2]), Is.EqualTo(0),
+                "The far surface must never be built when the chart never reaches its boundary.");
+        }
+
+        [Test]
+        public void Grid_ChainedSurfaces_BindsTilesToEverySurfaceInTheChain()
+        {
+            StubWorld world = StubWorld.CreateChain(3);
+            GeometrySurfaceConnectivity connectivity = new(world, world);
+            SurfacePoint seed = new(world.Chain[0], 0, new Vector3(0.5f, 0.25f, 0.25f));
+
+            SurfaceGrid grid = SurfaceGridBuilder.Build(
+                world, seed, 0.25f, SurfacePatchBuildSettings.Unlimited, Vector3.zero, connectivity);
+
+            HashSet<SurfaceHandle> bound = new();
+            foreach (SurfaceGridTileRegion tile in grid.Tiles)
+            {
+                foreach (SurfaceRegionVertex vertex in tile.Region.Vertices) bound.Add(vertex.SurfacePoint.Surface);
+            }
+
+            Assert.That(bound, Is.EquivalentTo(world.Chain));
+        }
+
         private static void AssertEdgeLength(
             SurfaceTopology topology,
             int firstVertex,
@@ -183,9 +236,17 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             private readonly Dictionary<SurfaceHandle, SurfaceTopology> _topologies = new();
             private readonly Dictionary<SurfaceHandle, ISurfaceAdapter> _adapters = new();
 
+            private readonly Dictionary<SurfaceHandle, Bounds> _bounds = new();
+            private readonly Dictionary<SurfaceHandle, int> _topologyRequests = new();
+
             public SurfaceHandle Left { get; private set; }
             public SurfaceHandle Right { get; private set; }
+            public IReadOnlyList<SurfaceHandle> Chain { get; private set; } = System.Array.Empty<SurfaceHandle>();
             public int DiscoverCallCount { get; private set; }
+
+            /// <summary>지정한 Surface의 topology가 요청된 횟수입니다. lazy 확장 관찰에 씁니다.</summary>
+            public int TopologyRequests(SurfaceHandle surface) =>
+                _topologyRequests.TryGetValue(surface, out int count) ? count : 0;
 
             /// <summary>x = 1에서 정확히 맞닿고 같은 방향을 향하는 두 평면입니다.</summary>
             public static StubWorld CreateAdjacentPlanes() => Create(
@@ -202,18 +263,42 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
                 Quad(new SurfaceHandle(55), -1f, SharedEdgeX, false),
                 Quad(new SurfaceHandle(56), SharedEdgeX, 3f, true));
 
-            public bool TryGetTopology(SurfaceHandle handle, out SurfaceTopology topology) =>
-                _topologies.TryGetValue(handle, out topology);
+            public bool TryGetTopology(SurfaceHandle handle, out SurfaceTopology topology)
+            {
+                _topologyRequests[handle] = TopologyRequests(handle) + 1;
+                return _topologies.TryGetValue(handle, out topology);
+            }
 
             public bool TryGetAdapter(SurfaceHandle surface, out ISurfaceAdapter adapter) =>
                 _adapters.TryGetValue(surface, out adapter);
 
+            /// <summary>Physics 질의처럼 반경과 겹치는 Surface만 돌려줍니다. lazy 확장의 전제입니다.</summary>
             public int Discover(in Vector3 worldPosition, float radius, LayerMask layerMask, List<ISurfaceAdapter> results)
             {
                 DiscoverCallCount++;
                 results.Clear();
-                results.AddRange(_adapters.Values);
+                foreach (KeyValuePair<SurfaceHandle, ISurfaceAdapter> entry in _adapters)
+                {
+                    if (_bounds[entry.Key].SqrDistance(worldPosition) <= radius * radius) results.Add(entry.Value);
+                }
                 return results.Count;
+            }
+
+            /// <summary>x축을 따라 정확히 맞닿는 Quad를 <paramref name="count"/>개 잇습니다.</summary>
+            public static StubWorld CreateChain(int count)
+            {
+                StubWorld world = new();
+                List<SurfaceHandle> chain = new();
+                for (int i = 0; i < count; i++)
+                {
+                    SurfaceTopology topology = Quad(new SurfaceHandle(61 + i), -1f + i * 2f, 1f + i * 2f, false);
+                    world.Add(topology);
+                    chain.Add(topology.Handle);
+                }
+                world.Chain = chain;
+                world.Left = chain[0];
+                world.Right = chain[count - 1];
+                return world;
             }
 
             private static StubWorld Create(SurfaceTopology left, SurfaceTopology right)
@@ -230,6 +315,9 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             {
                 _topologies[topology.Handle] = topology;
                 _adapters[topology.Handle] = new StubAdapter(topology.Handle);
+                Bounds bounds = new(topology.Positions[0], Vector3.zero);
+                foreach (Vector3 position in topology.Positions) bounds.Encapsulate(position);
+                _bounds[topology.Handle] = bounds;
             }
 
             /// <summary>xy 평면 위 [minimumX, maximumX] × [-1, 1] Quad를 만듭니다.</summary>

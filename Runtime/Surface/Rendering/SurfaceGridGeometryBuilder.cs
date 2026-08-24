@@ -35,11 +35,10 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
                 throw new ArgumentException("Grid belongs to another surface topology.", nameof(grid));
             if (grid.Patch.SpansMultipleSurfaces)
             {
-                // 여러 Surface에 걸친 chart는 Surface마다 다른 local-to-world 변환을 가지므로 하나의
-                // 출력 Mesh로 합치려면 Surface별 변환이 필요합니다. 조용히 잘못된 Geometry를 만드는
-                // 대신 명시적으로 거부합니다.
+                // 여러 Surface에 걸친 chart는 Surface마다 다른 변환을 가지므로 provider와 변환 조회를
+                // 함께 받는 overload를 써야 합니다. 조용히 잘못된 Geometry를 만들지 않습니다.
                 throw new ArgumentException(
-                    "Grid spans multiple surfaces; multi-surface geometry output is not supported yet.",
+                    "Grid spans multiple surfaces; use the overload that takes a provider and a transform source.",
                     nameof(grid));
             }
             if (surfaceOffset < 0f || float.IsNaN(surfaceOffset) || float.IsInfinity(surfaceOffset))
@@ -87,6 +86,82 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
                 {
                     triangleIndices.Add(vertexOffset + sourceIndex);
                 }
+            }
+
+            return new SurfaceGridGeometry(
+                positions.ToArray(),
+                normals.ToArray(),
+                intrinsicPositions.ToArray(),
+                tileIndices.ToArray(),
+                triangleIndices.ToArray(),
+                surfacePoints.ToArray());
+        }
+
+        /// <summary>
+        /// 여러 Surface에 걸친 Grid의 Geometry를 만듭니다. vertex마다 자기 Surface의 topology로 위치를
+        /// 평가하고 그 Surface의 local-to-world 변환을 거쳐 공통 월드 공간으로 모은 뒤, 마지막에
+        /// <paramref name="worldToTarget"/>으로 출력 공간으로 옮깁니다.
+        /// </summary>
+        public static SurfaceGridGeometry Build(
+            ISurfaceProvider surfaces,
+            ISurfaceTransformSource transforms,
+            SurfaceGrid grid,
+            in Matrix4x4 worldToTarget,
+            float surfaceOffset)
+        {
+            if (surfaces == null) throw new ArgumentNullException(nameof(surfaces));
+            if (transforms == null) throw new ArgumentNullException(nameof(transforms));
+            if (grid == null) throw new ArgumentNullException(nameof(grid));
+            if (surfaceOffset < 0f || float.IsNaN(surfaceOffset) || float.IsInfinity(surfaceOffset))
+                throw new ArgumentOutOfRangeException(nameof(surfaceOffset));
+            if (!IsFinite(worldToTarget))
+                throw new ArgumentException("Target transform must contain only finite values.", nameof(worldToTarget));
+            if (Mathf.Abs(worldToTarget.determinant) <= SingularDeterminantTolerance)
+            {
+                throw new ArgumentException(
+                    "Target transform must be invertible so normals can use its inverse transpose.",
+                    nameof(worldToTarget));
+            }
+
+            List<Vector3> positions = new();
+            List<Vector3> normals = new();
+            List<Vector2> intrinsicPositions = new();
+            List<int> tileIndices = new();
+            List<int> triangleIndices = new();
+            List<SurfacePoint> surfacePoints = new();
+            // Surface별 위치·법선 변환은 vertex마다 역산하기 비싸므로 처음 만났을 때 한 번만 계산합니다.
+            Dictionary<SurfaceHandle, (SurfaceTopology Topology, Matrix4x4 ToTarget, Matrix4x4 Normal)> resolved = new();
+
+            for (int tileIndex = 0; tileIndex < grid.Tiles.Count; tileIndex++)
+            {
+                SurfaceRegion region = grid.Tiles[tileIndex].Region;
+                int vertexOffset = positions.Count;
+                foreach (SurfaceRegionVertex vertex in region.Vertices)
+                {
+                    SurfaceHandle surface = vertex.SurfacePoint.Surface;
+                    if (!resolved.TryGetValue(surface, out var entry))
+                    {
+                        if (!surfaces.TryGetTopology(surface, out SurfaceTopology surfaceTopology))
+                            throw new ArgumentException($"Surface {surface} is not available from the provider.", nameof(surfaces));
+                        if (!transforms.TryGetSurfaceToWorld(surface, out Matrix4x4 surfaceToWorld))
+                            throw new ArgumentException($"Surface {surface} has no world transform.", nameof(transforms));
+                        Matrix4x4 toTarget = worldToTarget * surfaceToWorld;
+                        entry = (surfaceTopology, toTarget, toTarget.inverse.transpose);
+                        resolved.Add(surface, entry);
+                    }
+
+                    Vector3 sourceNormal = CalculateFaceNormal(entry.Topology, vertex.SurfacePoint.TriangleIndex);
+                    Vector3 targetNormal = entry.Normal.MultiplyVector(sourceNormal);
+                    targetNormal = targetNormal.sqrMagnitude > 0f ? targetNormal.normalized : Vector3.zero;
+                    Vector3 targetPosition = entry.ToTarget.MultiplyPoint3x4(entry.Topology.Evaluate(vertex.SurfacePoint));
+                    positions.Add(targetPosition + targetNormal * surfaceOffset);
+                    normals.Add(targetNormal);
+                    intrinsicPositions.Add(vertex.IntrinsicPosition);
+                    tileIndices.Add(tileIndex);
+                    surfacePoints.Add(vertex.SurfacePoint);
+                }
+
+                foreach (int sourceIndex in region.TriangleIndices) triangleIndices.Add(vertexOffset + sourceIndex);
             }
 
             return new SurfaceGridGeometry(

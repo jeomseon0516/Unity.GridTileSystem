@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+- **(Breaking)** `HexGridReceiver`/`SurfaceReceiverKind`를 삭제했습니다. `HexGridController`가
+  seed 위치·초기 방향·탐색 옵션을 직접 직렬화하고 `SurfaceGridSystem`으로 Grid를 만듭니다. 사용자는
+  더 이상 Surface 컴포넌트를 등록하거나 seed Triangle 번호를 입력하지 않습니다.
+- `HexGridController`가 단일 `SurfaceGrid`(경계 연결로 여러 Surface에 걸칠 수 있음)를 소유합니다.
+  Grid가 덮는 각 Surface의 Collider마다 picker를 만들어 Ray에서 가장 가까운 활성 Tile을 고릅니다.
+- Skinned Surface 변형 추종은 Grid가 **단일** Skinned Surface 위에만 있을 때 적용됩니다. 여러
+  Surface에 걸친 Grid는 Surface마다 변형 규칙이 달라 하나의 binding으로 표현할 수 없으므로 아직
+  변형을 따르지 않습니다(bind pose로 남음).
+- `SurfaceGridGeometryBuilder.Build(ISurfaceProvider, ISurfaceTransformSource, SurfaceGrid, ...)`와
+  `HexTileStore.Bake(ISurfaceProvider, ISurfaceTransformSource, SurfaceGrid)`를 추가해 여러 Surface에
+  걸친 Grid의 Geometry와 Tile 중심을 Surface별 변환으로 올바르게 만듭니다.
+- `ISurfaceTransformSource`를 추가했습니다. `GeometrySurfaceQuery`가 이를 구현해 handle에서
+  local-to-world 변환을 조회합니다.
+
 - Grid가 Surface 경계를 넘어 이어지도록 chart 확장을 추가했습니다. `ISurfaceConnectivity`와
   `SurfaceLink`가 boundary Edge 너머의 Surface Edge를 표현하고, `TriangleUnfoldingParameterizer`가
   `ISurfaceProvider`와 연결 계층을 받아 여러 Surface의 Face를 하나의 chart에 계속 펼칩니다. 연결을

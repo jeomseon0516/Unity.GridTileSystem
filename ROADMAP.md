@@ -40,6 +40,9 @@
 - [x] 월드 seed 위치 하나로 Grid를 만드는 `SurfaceGridRequest`/`SurfaceGridSystem`과 상태 기반 실패 진단
 - [x] boundary Edge 위치·법선 정합으로 이어지는 Surface를 찾는 `ISurfaceConnectivity`와
       `GeometrySurfaceConnectivity`, 여러 Surface에 걸치는 chart 확장
+- [x] `HexGridReceiver`/`SurfaceReceiverKind` 삭제. `HexGridController`가 seed 위치 기반
+      `SurfaceGridRequest`로 직접 Grid를 만들고, Surface Collider별 picker와 여러 Surface에 걸친
+      Geometry/Tile 중심 계산을 갖춤(N8)
 
 ## 안정화 게이트
 
