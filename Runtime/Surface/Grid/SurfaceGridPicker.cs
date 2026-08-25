@@ -41,7 +41,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
         /// <summary>Ray가 원본 Surface의 활성 Tile과 교차하면 해당 hit와 Tile Region을 반환합니다.</summary>
         public bool TryPick(
             in Ray ray,
-            LayerMask layerMask,
+            in LayerMask layerMask,
             out RaycastHit hit,
             out SurfaceGridTileRegion tile)
         {

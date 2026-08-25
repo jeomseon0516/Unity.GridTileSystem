@@ -15,4 +15,13 @@ MonoBehaviour:
   tileRadius: 0.75
   interactionLayerMask:
     serializedVersion: 2
-    m_Bits: 8
+    m_Bits: 4294967295
+  seedSearchRadius: 0.25
+  surfaceLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  preferredSurfaceDirection: {x: 0, y: -1, z: 0}
+  splitPatchWhenLimitReached: 1
+  maximumPatchTriangles: 4096
+  maximumPatchRadius: 100
+  maximumClosureError: 0.01

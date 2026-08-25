@@ -4,6 +4,9 @@
   "references": [
     "Jeomseon.Unity.Attributes",
     "Jeomseon.Unity.Core",
+    "Unity.Burst",
+    "Unity.Collections",
+    "Unity.Mathematics",
     "Unity.InputSystem"
   ],
   "includePlatforms": [],

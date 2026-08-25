@@ -22,16 +22,15 @@ namespace Jeomseon.Unity.GridTileSystem.Services
             _tileData = tileData;
         }
 
-        /// <summary>Ray가 활성 Logical Tile과 교차하면 사용자 Tile 상태를 반환합니다.</summary>
-        public bool TryPick(in Ray ray, LayerMask layerMask, out (bool, RaycastHit) hitTuple, out HexTile tile)
+        /// <summary>Ray가 Logical Tile과 교차하면 활성 상태와 관계없이 사용자 Tile 상태를 반환합니다.</summary>
+        public bool TryPick(in Ray ray, in LayerMask layerMask, out HexTilePickResult result)
         {
-            tile = null;
+            result = default;
             bool found = _surfacePicker.TryPick(ray, layerMask, out RaycastHit hit, out SurfaceGridTileRegion region);
-            hitTuple = (hit.collider != null, hit);
             if (found && _tileData.TryGetTile(region.Coordinates, out HexTile foundTile))
             {
-                tile = foundTile;
-                return foundTile.IsActive;
+                result = new HexTilePickResult(hit, foundTile);
+                return true;
             }
             return false;
         }

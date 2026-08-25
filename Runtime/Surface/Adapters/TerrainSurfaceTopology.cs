@@ -62,7 +62,12 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Adapters
         /// <inheritdoc />
         public override Vector3 Evaluate(in SurfacePoint point)
         {
-            if (!point.IsValid) throw new ArgumentException("Surface point has invalid barycentric coordinates.", nameof(point));
+            if (!point.IsValid)
+            {
+                throw new ArgumentException(
+                    $"Surface point {point.TriangleIndex} has invalid barycentric coordinates {point.Barycentric}.",
+                    nameof(point));
+            }
             if (point.Surface != Handle) throw new ArgumentException("Surface point belongs to another surface.", nameof(point));
             if (!IsTriangleTraversable(point.TriangleIndex)) throw new ArgumentOutOfRangeException(nameof(point));
             SurfaceTriangle triangle = GetTriangle(point.TriangleIndex);
@@ -83,7 +88,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Adapters
             int cellZ = Mathf.Min(_cellResolution - 1, Mathf.FloorToInt(gridZ));
             float fractionX = gridX - cellX;
             float fractionZ = gridZ - cellZ;
-            int triangleIndex = (cellZ * _cellResolution + cellX) * 2 + (fractionX + fractionZ <= 1f ? 0 : 1);
+            int triangleIndex = (cellZ * _cellResolution + cellX) * 2 + (fractionZ >= fractionX ? 0 : 1);
             if (!IsTriangleTraversable(triangleIndex)) return false;
             SurfaceTriangle triangle = GetTriangle(triangleIndex);
             Vector3 a = GetPosition(triangle.A);
@@ -106,7 +111,14 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Adapters
                 size.z * z / _cellResolution);
         }
 
-        /// <summary>cell의 두 Triangle을 위쪽 winding으로 계산합니다.</summary>
+        /// <summary>
+        /// cell의 두 Triangle을 위쪽 winding으로 계산합니다. 대각선은 `v00`-`v11`(main diagonal)을
+        /// 사용합니다 — Unity `TerrainCollider`가 실제로 heightfield cell을 분할하는 방향과 실측으로
+        /// 확인해 맞춘 것이며(2026-08-25, 합성 non-planar cell에 대한 <c>TerrainCollider.Raycast</c>
+        /// 결과), 이전에 쓰던 `v01`-`v10` 대각선은 Unity의 실제 렌더/충돌 표면과 어긋나 굴곡진
+        /// heightfield에서 이 Adapter가 만드는 Tile Mesh가 실제 화면의 Terrain 표면과 다른 위치에
+        /// 놓이는 근본 원인이었습니다. 자세한 내용은 패키지 `ROADMAP.md`를 참고합니다.
+        /// </summary>
         private SurfaceTriangle GetTriangle(int triangleIndex)
         {
             int cellIndex = triangleIndex / 2;
@@ -117,8 +129,8 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Adapters
             int v01 = v00 + _resolution;
             int v11 = v01 + 1;
             return (triangleIndex & 1) == 0
-                ? new SurfaceTriangle(v00, v01, v10)
-                : new SurfaceTriangle(v10, v01, v11);
+                ? new SurfaceTriangle(v00, v01, v11)
+                : new SurfaceTriangle(v00, v11, v10);
         }
 
         /// <summary>규칙적 heightfield의 이웃 Triangle을 배열 없이 계산합니다.</summary>
@@ -131,15 +143,17 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Adapters
             int localTriangle = triangleIndex & 1;
             if (localTriangle == 0)
             {
+                // (v00, v01, v11): Edge0=west, Edge1=north, Edge2=대각선(같은 cell의 local triangle 1)
                 return new SurfaceTriangleAdjacency(
                     GetNeighbor(x - 1, z, 1),
-                    triangleIndex + 1,
-                    GetNeighbor(x, z - 1, 1));
+                    GetNeighbor(x, z + 1, 1),
+                    triangleIndex + 1);
             }
+            // (v00, v11, v10): Edge0=대각선(같은 cell의 local triangle 0), Edge1=east, Edge2=south
             return new SurfaceTriangleAdjacency(
                 triangleIndex - 1,
-                GetNeighbor(x, z + 1, 0),
-                GetNeighbor(x + 1, z, 0));
+                GetNeighbor(x + 1, z, 0),
+                GetNeighbor(x, z - 1, 0));
         }
 
         /// <summary>cell 범위와 hole을 검사해 이웃 Triangle index 또는 경계 -1을 반환합니다.</summary>

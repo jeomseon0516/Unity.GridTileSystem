@@ -4,6 +4,123 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-25
+
+- **실제 Unity 사용자 검증에서 발견된 결함 수정** (`SurfaceRegionBuilder`/`HexGridSettings`):
+  - Sutherland-Hodgman clip 단계가 clip 경계 위에 정확히 있는 subject vertex를 만나면 intersection
+    계산 결과와 그 vertex 자체를 중복으로 추가하던 결함을 고쳤습니다(`AppendDistinct`). 중복 점은
+    zero-length Edge로 남아 Tile 외곽선 Edge count가 뒤섞이고(공유 Edge가 1도 2도 아닌 3~4로
+    집계), Scene View Gizmo에 실제 Hex 변이 아닌 대각선이 그려지는 원인이었습니다.
+  - `SurfaceRegionCanonicalizer`/`SurfaceRegionBuilder`의 quantize 허용 오차를 `1e-6`에서 `1e-4`로
+    올렸습니다. 좌표 크기 ~10~20 범위에서 서로 다른 clip 경로가 만드는 float32 반올림 오차가
+    실측 ~1e-6이라 예전 값은 오차 자체와 크기가 같아 같은 물리적 교점을 다른 점으로 오인했습니다.
+    Canonicalizer 조회도 자기 quantize 칸 하나가 아니라 인접 3x3 칸을 모두 확인하도록 넓혀 격자
+    경계에서 놓치는 경우를 없앴습니다. 여러 반경(0.15~4)과 Surface 경계를 가로지르는 Tile
+    시나리오에서 모든 Tile의 외곽선이 닫힌 단순 loop(꼭짓점 degree 전부 2)를 이루는지 헤드리스로
+    재검증했습니다.
+  - `HexGridSettings`의 모든 setter가 Edit Mode에서는 무조건 `SettingsChanged`를 다음 Editor tick으로
+    미루던 결함을 고쳤습니다. 원래 의도는 "Unity의 OnValidate 호출 스택 안에서 DestroyImmediate 금지"
+    제약을 피하는 것이었는데, 실제로는 `OnValidate`가 아닌 일반 코드(테스트 포함)에서 부른 setter까지
+    전부 지연시켜 동기 알림을 기대하는 코드가 즉시 반영을 못 받았습니다. 지연은 `OnValidate` 콜백
+    경로에만 적용하고, 그 밖의 모든 setter 호출은 항상 즉시 알립니다.
+  - Terrain Usage Sample Scene의 출력 `MeshRenderer`에 Material이 전혀 할당돼 있지 않아
+    (`m_Materials: [{fileID: 0}]`) Play Mode에서 Tile Mesh가 Unity 기본 missing-material 마젠타로
+    렌더링되던 결함을 고쳤습니다. Basic Usage Sample과 동일한 built-in `Sprites/Default` Material
+    참조로 채웠습니다.
+- `TerrainSurfaceTopology`가 모든 heightmap cell을 항상 `v01`-`v10` 대각선으로만 삼각분할하던
+  결함을 고쳤습니다. Unity Editor에서 합성 non-planar cell에 대해 `TerrainCollider.Raycast`를
+  직접 실측한 결과 Unity는 항상 `v00`-`v11` 대각선을 쓴다는 것을 확인했고, `GetTriangle`/
+  `TryGetSurfacePoint`/`GetAdjacency`를 그에 맞춰 교정했습니다. 이 불일치는 굴곡이 강한 heightfield
+  영역에서 Tile Mesh가 실제 렌더/충돌 Terrain 표면과 다른 위치에 놓이게 해 depth-bias 값을 아무리
+  올려도 해결되지 않던 z-fighting/floating의 원인 중 하나였습니다. 남은 원인(barycentric 계산이
+  질의점 Y를 실제 표면 높이 대신 0으로 사용)은 `ROADMAP.md`에 다음 작업으로 남겨뒀습니다.
+- Tile마다 None(숨김)/Fill(채움)/Outline(윤곽선)/Both 표현을 독립적으로 지정하는 기반을 추가했습니다.
+  `MeshSurfaceGridRenderBackend`는 Tile별 Fill/Outline index를 별도 submesh로 분리해 한 Mesh 안에서
+  서로 다른 Tile을 섞어 그립니다(`ApplyDrawModePartition`). GPU structured-buffer Backend는 Tile별
+  혼합을 지원하지 않고 `SetDrawMode`로 지정하는 grid 전체 단일 모드만 지원합니다(대규모 Terrain
+  대상이라 Tile당 GPU 분기 비용이 부담스러워 범위를 좁혔습니다). override 유무를 신뢰할 수 없던
+  일반 `[Serializable]` class는 `IHexTileDrawPolicy`와 `[SerializeReference]` 기반
+  `NoneDrawPolicy`/`FillDrawPolicy`/`OutlineDrawPolicy`/`BothDrawPolicy`로 교체했습니다. Settings 기본값과 Tile별
+  override 모두 `SerializeReferenceSelector`에서 타입을 선택하거나 실제 `null`로 지울 수 있습니다.
+- Scene View 편집 선택은 `IsActive == false`인 Tile도 포함하도록 런타임 입력 picking과
+  분리했습니다. 비활성 Tile은 게임 입력은 계속 무시하지만 Editor에서 선택·재활성화할 수 있습니다.
+- Backend에 전달되지 않아 Edit/Play 어느 쪽에서도 효과가 없던
+  `OutlineDrawPolicy.Thickness`/`Padding` placeholder를 제거했습니다.
+- `HexGridSettings.OnValidate` 지연 알림이 이미 예약된 tick에 public setter가 추가로
+  변경되어도 즉시 Mesh를 교체하지 않고 하나의 delay call로 합치도록 고쳤습니다.
+- 위 회귀 테스트가 Settings가 아닌 Controller의 `OnValidate`만 호출해 실제
+  ScriptableObject Inspector 경로를 재현하지 못하던 구성을 바로잡았습니다.
+- Player Mouse 통합 테스트가 native Mouse와 가상 Mouse를 동시에 등록해 `Mouse.current`가
+  바뀐 장치의 상태를 읽을 수 있던 비결정적 구성을 고쳤습니다. 테스트 동안 기존 Mouse를
+  격리하고 각 state update 후 가상 Mouse를 current로 확정합니다.
+- Terrain heightfield의 비영 곡률 loop를 shared-edge unfolding 또는 seed 접평면에 투영해 chart가
+  접히고 긴 Triangle·구멍이 생기던 문제를 고쳤습니다. Terrain은 local XZ heightfield chart를
+  사용하고 실제 높이는 barycentric binding으로 복원합니다.
+- 같은 intrinsic 경계점의 offset 적용 위치를 공유해 Face 법선 차이로 fragment 사이가 벌어지지
+  않게 했고, Outline 내부 경계 제거 허용오차를 canonicalization 기준과 일치시켰습니다.
+- Renderer에 사용자 Material이 없을 때 패키지 내장 vertex-color/depth-bias Material을 자동으로
+  생성하는 기본 경로를 추가했습니다. Geometry는 `Surface Offset = 0`으로 표면에 정합한 채 Terrain
+  LOD와의 깊이 충돌만 렌더 단계에서 보정하며, 사용자 Material과 Backend 비소유 Material은 유지합니다.
+- Region canonicalization은 공유 intrinsic 표시 좌표에만 적용하고, Face별 SurfacePoint의
+  barycentric binding은 clipping 원본 점으로 계산하도록 분리했습니다.
+- `Clear Baked Tiles`가 직렬화 배열을 비운 즉시 ListView가 이전 index로 다시 bind해
+  범위 초과 예외를 내던 문제를 unbind/rebind과 bind index 방어로 고쳤습니다.
+- Edit Mode의 빈 Tile 목록은 명시적 Clear 상태로 유지합니다. 직렬화 Tile이
+  있을 때만 Preview Geometry를 복구하고, Play Mode는 Tile이 비었으면 자동 Bake합니다.
+- Terrain Sample heightmap을 두 개의 가파른 능선, 중앙 골짜기와 보조 ridge가 있는
+  굴곡으로 갱신했습니다. Seed 높이를 새 지형에 맞춰 조정하고 149개 Tile Bake 상태를
+  Scene에 직렬화해 Sample을 열자마자 Edit Mode 정합 결과를 확인할 수 있게 했습니다.
+- Editor Inspector에 Bake된 Tile 목록을 보여주는 virtualization 지원 `ListView`를 추가했습니다.
+  기존 IMGUI 배열 그리기는 보이지 않는 Tile까지 컨트롤을 만들어 Tile이 많아지면 Inspector가
+  느려졌습니다. Scene View 클릭과 목록 선택이 같은 Tile 편집 Overlay 경로를 공유합니다. Edit Mode에서
+  비직렬화 Preview Mesh/Backend가 유실되면 Inspector가 복구하고, List/Overlay의 SerializedProperty
+  편집이 public setter를 우회해도 Color·Active·DrawPolicy를 즉시 실제 Mesh에 다시 적용합니다.
+- Scene View에 Edit Mode에서도 항상 모든 Tile의 외곽 Hex 윤곽을 그리는 Gizmo를 추가했습니다.
+  마지막 Bake Geometry를 재사용하므로 별도 계산이 없고, 실제 출력 Mesh가 Fill로 그리고 있어도
+  경계를 확인할 수 있습니다.
+- `HexGridController`에서 재사용 가능한 Surface 탐색·Patch 성장 정책을 제거하고
+  `HexGridSettings`로 이동했습니다. Controller는 Camera, seed Transform/offset/direction, 출력
+  Renderer와 surface offset처럼 Scene/Prefab 배치에 속하는 값만 직렬화합니다.
+- Editor에서 `HexGridSettings.OnValidate`가 발생한 같은 콜백 안에서 runtime Mesh를
+  `DestroyImmediate`하던 예외를 수정했습니다. 편집 모드 설정 변경은 다음 Editor tick의 Bake 하나로
+  병합되고, Controller가 비활성화·파괴되면 예약도 취소됩니다.
+- Parameterizer가 함께 산출하는 폐합 오차·성장 제한·graph 거리·metric distortion을
+  `SurfacePatchDiagnostics`로 묶었습니다. 실행 의존성까지 DTO로 감싸지 않고 반복 전달되는 진단값만
+  명확한 결과 컨테이너로 정리했습니다.
+- `IHexTilePicker.TryPick`의 중복 성공 상태와 무명 `(bool, RaycastHit)` 튜플을 제거했습니다.
+  성공 시 `RaycastHit`과 활성 `HexTile`을 함께 제공하는 `HexTilePickResult`를 반환합니다.
+- `HexGridPointerInput`이 Input System의 순간 `wasPressedThisFrame`/`wasReleasedThisFrame` 상태에
+  의존하지 않고 이전·현재 버튼 상태를 직접 비교합니다. Input update 순서에 따라 Down/Up이 사라지는
+  문제를 막았으며 실제 PlayMode Mouse 상태 주입으로 Enter/Down/Up을 검증합니다.
+- Basic Sample의 이벤트 구독을 `Start`에서 `OnEnable`로 앞당겨 Controller의 첫 Update가 발생시키는
+  Enter 이벤트도 놓치지 않습니다. 런타임 생성·도메인 전환에서도 UnityEvent 필드가 null이면 안전하게
+  초기화합니다. Basic Sample 컴포넌트는 입력 이벤트 로그만 담당하며 Material과 Tile 상태를 변경하지
+  않습니다. Terrain Sample의 연출 전용 컴포넌트는 제거했습니다. 두 Scene은 built-in
+  `Sprites/Default` Material을 직렬화하고 Edit Mode와 Play Mode에서 동일한 실제
+  `MeshSurfaceGridRenderBackend` 결과를 표시합니다.
+- Basic Sample의 이벤트 미발생 원인은 Grid picking이 아니라 프로젝트 Input System의 Editor 입력
+  라우팅이었습니다. 활성 Input Settings asset 없이 기본 `PointersAndKeyboardsRespectGameViewFocus`를
+  사용하면 Game View가 입력 포커스를 받지 못한 동안 `Mouse.current.position`이 `(0,0)`으로 유지됩니다.
+  패키지는 IMGUI 우회 없이 Input System 경로만 유지하며, 검증 프로젝트가 명시적 Input Settings asset과
+  `AllDeviceInputAlwaysGoesToGameView`를 사용하도록 구성했습니다.
+- Patch corner convex hull과 겹치지 않는 Hex 후보를 Region clipping 전에 제거하고
+  `CandidateTileCount`/`RegionBuildCount`로 비용을 계측합니다.
+- Grid build 범위의 canonical vertex cache로 인접 Tile이 공유하는 intrinsic 교점을 동일 좌표로 통일합니다.
+- `SurfacePatchTriangle.GraphGeodesicDistance`와 Patch 최대 graph 거리·최대/평균 edge metric distortion
+  진단을 추가했습니다. Patch 반경은 chart 직선거리 대신 adjacency 경로의 누적 intrinsic 거리 상한을
+  사용합니다.
+- `ISurfaceParameterizer`와 `SurfacePatchSet`을 추가하고 `SurfaceGridSystem`에 Parameterizer 주입 경계를
+  연결했습니다. Triangle Unfolding과 향후 ExpMap/자동 분할이 같은 출력 계약을 사용합니다.
+- 성장 frontier의 실제 펼침 좌표를 공유하는 Face 중복 없는 자동 다중 Patch와 전체 Patch Region 병합을
+  추가했습니다. `DistortionAdaptiveSurfaceParameterizer`는 metric 임계값을 넘으면 Patch 크기를 줄입니다.
+- `SurfaceGrid.Surfaces`/`SpansMultipleSurfaces`를 전체 Patch 기준으로 계산하고 Controller picker,
+  Skinned binding, 단일/multi-surface Geometry 및 Chunk 소비자가 같은 범위를 사용합니다.
+- `SurfaceGridSnapshot`/`SurfaceGridDelta`, dirty `SurfaceGridChunk`, Chunk Geometry 재생성 계약을 추가했습니다.
+- Burst/Jobs barycentric 평가 커널과 GPU structured-buffer indexed-indirect Backend를 추가했습니다.
+- seed tangent 1차 ExpMap 비교 기준과 `SurfaceParameterizationComparison`을 추가했습니다.
+- Basic/Terrain Play Mode와 Controller Inspector 캡처를 한·영 README에 추가했습니다. Terrain Sample은
+  렌더 LOD와의 z-fighting을 피하도록 출력 offset을 0.03으로 조정했습니다.
+
 - **(Breaking)** `HexGridReceiver`/`SurfaceReceiverKind`를 삭제했습니다. `HexGridController`가
   seed 위치·초기 방향·탐색 옵션을 직접 직렬화하고 `SurfaceGridSystem`으로 Grid를 만듭니다. 사용자는
   더 이상 Surface 컴포넌트를 등록하거나 seed Triangle 번호를 입력하지 않습니다.
@@ -17,6 +134,11 @@
   걸친 Grid의 Geometry와 Tile 중심을 Surface별 변환으로 올바르게 만듭니다.
 - `ISurfaceTransformSource`를 추가했습니다. `GeometrySurfaceQuery`가 이를 구현해 handle에서
   local-to-world 변환을 조회합니다.
+- Basic/Terrain Sample Scene을 새 seed/output 필드로 마이그레이션했습니다. Unity 6000.5.7f1에서
+  각각 126 Tile/2842 vertex, 12 Tile/952 vertex를 실제 Bake했습니다.
+- `SurfaceGridSystem.Clear()`가 연결 결과와 boundary 색인을 Adapter/topology와 함께 비워 Scene 변경 뒤
+  이전 Surface 연결이 재사용되지 않게 했습니다. N7의 3-Surface chain 및 제한 성장 회귀를 포함한
+  EditMode 테스트 164/164가 통과했습니다.
 
 - Grid가 Surface 경계를 넘어 이어지도록 chart 확장을 추가했습니다. `ISurfaceConnectivity`와
   `SurfaceLink`가 boundary Edge 너머의 Surface Edge를 표현하고, `TriangleUnfoldingParameterizer`가

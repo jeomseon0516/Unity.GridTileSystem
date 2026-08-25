@@ -72,6 +72,28 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
         }
 
         [Test]
+        public void BakeTiles_WhenPatchLimitIsReached_UsesControllerAutomaticSplitting()
+        {
+            Mesh surfaceMesh = CreateLargePlaneMesh();
+            GameObject sourceObject = CreatePlane(surfaceMesh, Vector3.zero);
+            HexGridSettings settings = CreateSettings(4f);
+            HexGridController controller = CreateController(settings, null, null);
+            settings.MaximumPatchTriangles = 1;
+            settings.SplitPatchWhenLimitReached = true;
+
+            Physics.SyncTransforms();
+            controller.BakeTiles();
+
+            Assert.That(controller.SurfaceGrid, Is.Not.Null);
+            Assert.That(controller.SurfaceGrid.Patches, Has.Count.EqualTo(2));
+            Assert.That(controller.TileCount, Is.GreaterThan(0));
+
+            DestroyAll(controller.gameObject, sourceObject);
+            Object.DestroyImmediate(settings);
+            Object.DestroyImmediate(surfaceMesh);
+        }
+
+        [Test]
         public void BakeTiles_WithoutRenderingBackend_CreatesLogicalTilesAndSupportsStateChanges()
         {
             Mesh surfaceMesh = CreateLargePlaneMesh();
@@ -111,6 +133,67 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             Assert.That(controller.TileCount, Is.Zero);
             Assert.That(controller.SurfaceGrid, Is.Null);
             Assert.That(outputFilter.sharedMesh, Is.Null);
+
+            DestroyAll(controller.gameObject, outputObject, sourceObject);
+            Object.DestroyImmediate(settings);
+            Object.DestroyImmediate(surfaceMesh);
+        }
+
+        [Test]
+        public void ClearTiles_InEditMode_RemainsClearedWhenControllerIsEnabledAgain()
+        {
+            Mesh surfaceMesh = CreateLargePlaneMesh();
+            GameObject sourceObject = CreatePlane(surfaceMesh, Vector3.zero);
+            HexGridSettings settings = CreateSettings(4f);
+            HexGridController controller = CreateController(settings, null, null);
+
+            Physics.SyncTransforms();
+            controller.BakeTiles();
+            Assert.That(controller.TileCount, Is.GreaterThan(0));
+            controller.ClearTiles();
+
+            InvokeNonPublic(controller, "OnEnable");
+
+            Assert.That(controller.TileCount, Is.Zero,
+                "An explicit Edit Mode clear must not be undone by preview lifecycle recovery.");
+            Assert.That(controller.SurfaceGrid, Is.Null);
+
+            DestroyAll(controller.gameObject, sourceObject);
+            Object.DestroyImmediate(settings);
+            Object.DestroyImmediate(surfaceMesh);
+        }
+
+        [Test]
+        public void SettingsChanged_InEditMode_DefersAndCoalescesMeshRebake()
+        {
+            Mesh surfaceMesh = CreateLargePlaneMesh();
+            GameObject sourceObject = CreatePlane(surfaceMesh, Vector3.zero);
+            GameObject outputObject = new("Deferred Grid Output");
+            MeshFilter outputFilter = outputObject.AddComponent<MeshFilter>();
+            MeshRenderer outputRenderer = outputObject.AddComponent<MeshRenderer>();
+            HexGridSettings settings = CreateSettings(4f);
+            HexGridController controller = CreateController(settings, outputFilter, outputRenderer);
+            InvokeNonPublic(controller, "OnValidate");
+
+            Physics.SyncTransforms();
+            controller.BakeTiles();
+            Mesh firstMesh = outputFilter.sharedMesh;
+
+            // Inspector가 Settings asset을 직렬화한 실제 경로를 재현합니다. Controller.OnValidate는
+            // 구독 갱신만 담당하며 Settings의 지연 변경 알림을 예약하지 않습니다.
+            InvokeNonPublic(settings, "OnValidate");
+            settings.TileRadius = 3f;
+            settings.TileRadius = 2f;
+
+            Assert.That(outputFilter.sharedMesh, Is.SameAs(firstMesh),
+                "Settings callbacks must not dispose a Mesh synchronously from ScriptableObject.OnValidate.");
+            Assert.That(GetField<bool>(settings, "_settingsChangedQueued"), Is.True);
+
+            InvokeNonPublic(settings, "RaiseQueuedSettingsChanged");
+
+            Assert.That(GetField<bool>(settings, "_settingsChangedQueued"), Is.False);
+            Assert.That(outputFilter.sharedMesh, Is.Not.Null.And.Not.SameAs(firstMesh));
+            Assert.That(controller.TileRadius, Is.EqualTo(2f));
 
             DestroyAll(controller.gameObject, outputObject, sourceObject);
             Object.DestroyImmediate(settings);
@@ -166,8 +249,8 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             GameObject secondObject = CreatePlane(secondMesh, new Vector3(20f, 0f, 0f));
             HexGridSettings settings = CreateSettings(4f);
             HexGridController controller = CreateController(settings, null, null);
-            SetField(controller, "seedSearchRadius", 40f);
-            SetField(controller, "maximumPatchRadius", 40f);
+            settings.SeedSearchRadius = 40f;
+            settings.MaximumPatchRadius = 40f;
 
             Physics.SyncTransforms();
             controller.BakeTiles();
@@ -191,6 +274,11 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
         public void BakeTiles_OverTerrain_BuildsAndPicksVirtualTopologyGrid()
         {
             TerrainData terrainData = new() { heightmapResolution = 33, size = new Vector3(32f, 4f, 32f) };
+            float[,] heights = new float[33, 33];
+            for (int z = 0; z < 33; z++)
+            for (int x = 0; x < 33; x++)
+                heights[z, x] = 0.08f * (Mathf.Sin(x * 0.35f) + Mathf.Cos(z * 0.27f) + 2f);
+            terrainData.SetHeights(0, 0, heights);
             GameObject terrainObject = Terrain.CreateTerrainGameObject(terrainData);
             terrainObject.name = "Terrain Surface";
             terrainObject.layer = 8;
@@ -208,10 +296,14 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             Physics.SyncTransforms();
 
             Assert.That(controller.SurfaceGrid, Is.Not.Null);
-            Assert.That(controller.TileCount, Is.GreaterThan(0));
+            Assert.That(controller.TileCount, Is.GreaterThan(50),
+                "A curved heightfield must retain a contiguous grid instead of losing most complete tiles to chart overlap.");
             Ray ray = new(new Vector3(16.333333f, 10f, 16.333333f), Vector3.down);
-            Assert.That(controller.TryPickTile(ray, out RaycastHit hit, out _), Is.True);
+            Assert.That(controller.TryPickTile(ray, out RaycastHit hit, out IHexTile tile), Is.True);
             Assert.That(hit.collider, Is.SameAs(terrainCollider));
+            tile.IsActive = false;
+            Assert.That(controller.TryPickTile(ray, out _, out _), Is.False,
+                "Runtime picking must continue to ignore inactive tiles.");
 
             DestroyAll(controllerObject, terrainObject);
             Object.DestroyImmediate(settings);
@@ -270,11 +362,25 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             foreach (GameObject target in objects) Object.DestroyImmediate(target);
         }
 
-        private static void SetField<T>(HexGridController controller, string fieldName, T value)
+        private static void SetField<T>(Object target, string fieldName, T value)
         {
-            FieldInfo field = typeof(HexGridController).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"Missing serialized field: {fieldName}");
-            field.SetValue(controller, value);
+            field.SetValue(target, value);
+        }
+
+        private static T GetField<T>(Object target, string fieldName)
+        {
+            FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"Missing field: {fieldName}");
+            return (T)field.GetValue(target);
+        }
+
+        private static void InvokeNonPublic(Object target, string methodName)
+        {
+            MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, $"Missing method: {methodName}");
+            method.Invoke(target, null);
         }
 
         /// <summary>실제 Update의 장치 polling을 제외한 pointer 처리 단계를 통합 테스트에서 호출합니다.</summary>

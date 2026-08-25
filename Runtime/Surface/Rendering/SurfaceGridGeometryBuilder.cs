@@ -33,7 +33,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
             if (grid == null) throw new ArgumentNullException(nameof(grid));
             if (grid.Patch.Surface != topology.Handle)
                 throw new ArgumentException("Grid belongs to another surface topology.", nameof(grid));
-            if (grid.Patch.SpansMultipleSurfaces)
+            if (grid.SpansMultipleSurfaces)
             {
                 // 여러 Surface에 걸친 chart는 Surface마다 다른 변환을 가지므로 provider와 변환 조회를
                 // 함께 받는 overload를 써야 합니다. 조용히 잘못된 Geometry를 만들지 않습니다.
@@ -57,7 +57,9 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
             List<Vector2> intrinsicPositions = new();
             List<int> tileIndices = new();
             List<int> triangleIndices = new();
+            List<int> outlineIndices = new();
             List<SurfacePoint> surfacePoints = new();
+            Dictionary<Vector2, Vector3> sharedPositions = new();
             // 행렬 역산은 vertex마다 반복하기 비싸므로 snapshot 구축당 한 번만 계산합니다.
             Matrix4x4 normalMatrix = surfaceToTarget.inverse.transpose;
 
@@ -72,8 +74,9 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
                     // inverse-transpose 행렬로 변환해야 합니다. 방향이므로 translation은 적용하지 않습니다.
                     Vector3 targetNormal = normalMatrix.MultiplyVector(sourceNormal);
                     targetNormal = targetNormal.sqrMagnitude > 0f ? targetNormal.normalized : Vector3.zero;
-                    Vector3 targetPosition = surfaceToTarget.MultiplyPoint3x4(topology.Evaluate(vertex.SurfacePoint));
-                    positions.Add(targetPosition + targetNormal * surfaceOffset);
+                    Vector3 targetPosition = surfaceToTarget.MultiplyPoint3x4(topology.Evaluate(vertex.SurfacePoint)) +
+                                             targetNormal * surfaceOffset;
+                    positions.Add(ResolveSharedPosition(sharedPositions, vertex.IntrinsicPosition, targetPosition));
                     normals.Add(targetNormal);
                     intrinsicPositions.Add(vertex.IntrinsicPosition);
                     tileIndices.Add(tileIndex);
@@ -86,6 +89,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
                 {
                     triangleIndices.Add(vertexOffset + sourceIndex);
                 }
+                AppendOutlineEdges(region.Vertices, region.TriangleIndices, vertexOffset, outlineIndices);
             }
 
             return new SurfaceGridGeometry(
@@ -94,6 +98,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
                 intrinsicPositions.ToArray(),
                 tileIndices.ToArray(),
                 triangleIndices.ToArray(),
+                outlineIndices.ToArray(),
                 surfacePoints.ToArray());
         }
 
@@ -128,7 +133,9 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
             List<Vector2> intrinsicPositions = new();
             List<int> tileIndices = new();
             List<int> triangleIndices = new();
+            List<int> outlineIndices = new();
             List<SurfacePoint> surfacePoints = new();
+            Dictionary<Vector2, Vector3> sharedPositions = new();
             // Surface별 위치·법선 변환은 vertex마다 역산하기 비싸므로 처음 만났을 때 한 번만 계산합니다.
             Dictionary<SurfaceHandle, (SurfaceTopology Topology, Matrix4x4 ToTarget, Matrix4x4 Normal)> resolved = new();
 
@@ -153,8 +160,9 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
                     Vector3 sourceNormal = CalculateFaceNormal(entry.Topology, vertex.SurfacePoint.TriangleIndex);
                     Vector3 targetNormal = entry.Normal.MultiplyVector(sourceNormal);
                     targetNormal = targetNormal.sqrMagnitude > 0f ? targetNormal.normalized : Vector3.zero;
-                    Vector3 targetPosition = entry.ToTarget.MultiplyPoint3x4(entry.Topology.Evaluate(vertex.SurfacePoint));
-                    positions.Add(targetPosition + targetNormal * surfaceOffset);
+                    Vector3 targetPosition = entry.ToTarget.MultiplyPoint3x4(entry.Topology.Evaluate(vertex.SurfacePoint)) +
+                                             targetNormal * surfaceOffset;
+                    positions.Add(ResolveSharedPosition(sharedPositions, vertex.IntrinsicPosition, targetPosition));
                     normals.Add(targetNormal);
                     intrinsicPositions.Add(vertex.IntrinsicPosition);
                     tileIndices.Add(tileIndex);
@@ -162,6 +170,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
                 }
 
                 foreach (int sourceIndex in region.TriangleIndices) triangleIndices.Add(vertexOffset + sourceIndex);
+                AppendOutlineEdges(region.Vertices, region.TriangleIndices, vertexOffset, outlineIndices);
             }
 
             return new SurfaceGridGeometry(
@@ -170,7 +179,84 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
                 intrinsicPositions.ToArray(),
                 tileIndices.ToArray(),
                 triangleIndices.ToArray(),
+                outlineIndices.ToArray(),
                 surfacePoints.ToArray());
+        }
+
+        /// <summary>Edge 등장 횟수 quantize에 쓰는 허용 오차입니다. Region canonicalizer와 동일합니다.</summary>
+        private const float OutlineEdgeQuantizeTolerance = 0.0001f;
+
+        /// <summary>
+        /// 한 Tile의 삼각화 결과에서 정확히 한 Triangle만 참조하는 Edge(=Tile 바깥 경계)만 골라 Line
+        /// index로 추가합니다. clipping은 겹치는 Patch Triangle마다 별도 fragment를 만들고 각
+        /// fragment가 자기 vertex를 새로 발급하므로(index를 공유하지 않음), fragment 사이 공유 Edge를
+        /// index로 비교하면 서로 다른 Edge로 오인해 그대로 남습니다. 그래서 vertex index가 아니라
+        /// intrinsic 2D 위치를 quantize한 값으로 Edge를 식별해야 fragment 경계도 올바르게 걸러집니다.
+        /// </summary>
+        private static void AppendOutlineEdges(
+            IReadOnlyList<SurfaceRegionVertex> regionVertices,
+            IReadOnlyList<int> regionTriangleIndices,
+            int vertexOffset,
+            List<int> outlineIndices)
+        {
+            Dictionary<((long, long) Low, (long, long) High), (int A, int B, int Count)> edges = new();
+            for (int i = 0; i < regionTriangleIndices.Count; i += 3)
+            {
+                CountEdge(edges, regionVertices, regionTriangleIndices[i], regionTriangleIndices[i + 1]);
+                CountEdge(edges, regionVertices, regionTriangleIndices[i + 1], regionTriangleIndices[i + 2]);
+                CountEdge(edges, regionVertices, regionTriangleIndices[i + 2], regionTriangleIndices[i]);
+            }
+
+            foreach ((int A, int B, int Count) edge in edges.Values)
+            {
+                if (edge.Count != 1) continue;
+                outlineIndices.Add(vertexOffset + edge.A);
+                outlineIndices.Add(vertexOffset + edge.B);
+            }
+        }
+
+        /// <summary>두 local vertex의 quantize된 위치로 방향 없는 Edge key를 만들어 등장 횟수를 누적합니다.</summary>
+        private static void CountEdge(
+            Dictionary<((long, long) Low, (long, long) High), (int A, int B, int Count)> edges,
+            IReadOnlyList<SurfaceRegionVertex> regionVertices,
+            int a,
+            int b)
+        {
+            (long, long) positionA = Quantize(regionVertices[a].IntrinsicPosition);
+            (long, long) positionB = Quantize(regionVertices[b].IntrinsicPosition);
+            bool aIsLow = IsLessOrEqual(positionA, positionB);
+            ((long, long) Low, (long, long) High) key = aIsLow ? (positionA, positionB) : (positionB, positionA);
+
+            if (edges.TryGetValue(key, out (int A, int B, int Count) existing))
+            {
+                edges[key] = (existing.A, existing.B, existing.Count + 1);
+                return;
+            }
+            edges[key] = aIsLow ? (a, b, 1) : (b, a, 1);
+        }
+
+        /// <summary>intrinsic 2D 위치를 정수 격자로 반올림해 부동소수점 오차 안에서 같은 점을 같은 key로 묶습니다.</summary>
+        private static (long, long) Quantize(in Vector2 point) => (
+            (long)Math.Round(point.x / OutlineEdgeQuantizeTolerance),
+            (long)Math.Round(point.y / OutlineEdgeQuantizeTolerance));
+
+        /// <summary>두 quantize된 좌표 쌍에 임의의 전순서를 부여해 Edge key의 방향을 정규화합니다.</summary>
+        private static bool IsLessOrEqual((long, long) a, (long, long) b) =>
+            a.Item1 != b.Item1 ? a.Item1 < b.Item1 : a.Item2 <= b.Item2;
+
+        /// <summary>
+        /// clipping fragment가 같은 intrinsic 경계점을 서로 다른 Face binding으로 보존해도 최종 위치는
+        /// 최초 평가값 하나로 통일합니다. 특히 법선 offset은 Face마다 방향이 달라 공유 경계를 벌릴 수
+        /// 있으므로 offset 적용 뒤의 위치를 공유해야 watertight surface가 유지됩니다.
+        /// </summary>
+        private static Vector3 ResolveSharedPosition(
+            Dictionary<Vector2, Vector3> sharedPositions,
+            in Vector2 intrinsicPosition,
+            in Vector3 evaluatedPosition)
+        {
+            if (sharedPositions.TryGetValue(intrinsicPosition, out Vector3 sharedPosition)) return sharedPosition;
+            sharedPositions.Add(intrinsicPosition, evaluatedPosition);
+            return evaluatedPosition;
         }
 
         /// <summary>원본 Triangle winding의 외적을 정규화해 Face 법선을 계산합니다.</summary>

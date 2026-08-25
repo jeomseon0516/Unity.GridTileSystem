@@ -2,26 +2,28 @@
 
 이 샘플은 Projector 없이 Static Mesh topology에서 intrinsic Grid를 생성하는 예제입니다.
 
+Edit Mode에서 `Rebuild Tiles`를 누르면 실제 Tile Mesh를 미리 확인할 수 있습니다.
+`Clear Baked Tiles`는 명시적으로 0개 상태를 유지하며, Play Mode는 Bake된 Tile이 없으면
+실행에 필요한 Grid를 자동 Bake합니다.
+
 `HexGridBasicUsage` Scene을 열고 Play Mode에 진입합니다. Scene에는 다음 항목이 미리
 연결돼 있습니다.
 
 - `HexGridSettings` asset (`Tile Radius: 0.5`, `Interaction Layer Mask: Layer 3`)
-- `Receivers` 목록의 평면 Receiver 하나
-- Receiver에서 같은 Mesh를 사용하는 source `MeshFilter`와 `MeshCollider`
-- Receiver 전용 별도 output `MeshFilter`/`MeshRenderer`
+- 같은 Mesh를 사용하는 source `MeshFilter`와 `MeshCollider`
+- Controller 전용 별도 output `MeshFilter`/`MeshRenderer`
 - Layer 3의 Surface와 Main Camera
 - `HexGridController`와 `HexGridSample`
 
 육각형 전체가 Surface 안에 들어오는 완전한 타일만 생성되고 Grid Geometry가 Plane 표면에 정합되는지
 확인합니다. Surface 경계에서 일부가 잘리는 타일은 생성하지 않으므로 가장자리에는 Tile Radius에 따른
-여백이 생깁니다. 기본
-Sample 스크립트는 별도 Shader asset이나 Render Pipeline 의존 없이 Unity 기본
-`Sprites/Default` Shader로 runtime Material을 만들고 Logical 좌표 parity에 따라 두 vertex color를
-교차 적용합니다. Player에서 해당 기본 Shader를 strip했다면 경고가 출력되며, 이 경우 vertex color를
-소비하는 프로젝트 Material을 output MeshRenderer에 지정합니다.
+여백이 생깁니다. output MeshRenderer에는 Unity built-in `Sprites/Default` Material이 Scene에 미리
+직렬화돼 있으며, Sample 스크립트가 Material이나 Tile 색상을 lifecycle 중 변경하지 않습니다.
+Edit Mode와 Play Mode 모두 Controller의 동일한 실제 Mesh Backend 결과를 표시합니다.
 
-Unity 기본 Plane의 중앙 Triangle인 index `100`을 seed로 사용합니다. 정상 실행 시 Console에
-`Generated hex tile count: 126`이 출력되고, 청록/파랑 checker Grid의 외곽에 잘린 타일이 없어야 합니다.
+기존 중앙 Triangle index `100`의 중심을 월드 `Seed Offset`으로 마이그레이션했습니다. 사용자가
+Triangle 번호를 입력하는 단계는 없습니다. 정상 실행 시 Console에
+`Generated hex tile count: 126`이 출력되고, 기본 cyan Grid의 외곽에 잘린 타일이 없어야 합니다.
 Inspector의 `Rebuild Tiles → Clear Baked Tiles → Rebuild Tiles` 순서에서도 예외 없이 같은 개수가
 복원돼야 합니다.
 
@@ -41,7 +43,7 @@ Grid 범위를 지정하는 설정은 없습니다. Grid는 항상 Surface 전�
 `Tile Radius`는 원본 Mesh의 **local 공간 길이**입니다. Sample의 Plane은 scale 1.4를 쓰므로 화면에
 보이는 Tile은 이 값의 1.4배 크기입니다.
 
-Grid가 덮는 최대 범위는 `HexGridController`의 `Maximum Patch Triangles`와 `Maximum Patch Radius`가
+Grid가 덮는 최대 범위는 `HexGridSettings`의 `Maximum Patch Triangles`와 `Maximum Patch Radius`가
 성능 안전장치로 제어합니다. 한계에 도달하면 Console에 경고가 출력되고 Grid가 표면 일부만 덮습니다.
 
 ## Pointer 상호작용 확인
@@ -57,6 +59,13 @@ View 위로 마우스를 움직이며 다음을 확인합니다.
 | Grid 밖으로 이동 | `Exited tile: (q, r)` 1회 |
 | 타일 위에서 클릭 | `Pointer down on tile:` → `Pointer up on tile:` |
 | Grid 밖에서 클릭 | down/up 로그 없음 |
+
+이벤트가 전혀 발생하지 않고 `Mouse.current.position`이 `(0,0)`으로 유지되면 Grid나 Collider보다 먼저
+`Edit > Project Settings > Input System Package > Play Mode Input Behavior`를 확인합니다. 기본값
+`Pointers And Keyboards Respect Game View Focus`에서는 Game View가 포커스를 가져야 pointer 입력이
+Player Loop로 전달됩니다. 포커스와 무관한 반복 검증 프로젝트는 별도 Input Settings asset을 만들고
+`All Device Input Always Goes To Game View`를 명시할 수 있습니다. 이 설정은 프로젝트 전체 Editor 입력
+정책이므로 패키지 Runtime에서 변경하지 않습니다.
 
 `HexTileSelectionState`는 **새 타일의 Enter를 이전 타일의 Exit보다 먼저** 발행합니다. 타일 사이를
 직접 이동할 때 `Entered → Exited` 순서로 보이는 것이 정상이며, Exit에서 상태를 되돌리는 코드는 이

@@ -69,6 +69,29 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             return BuildInternal(surfaces, seed.Surface, seed.TriangleIndex, settings, seed.Barycentric, connectivity);
         }
 
+        /// <summary>
+        /// 이미 다른 Patch에 배정된 Face를 제외하고 하나의 Patch를 펼치며, 성장 제한에서 만난 Face를
+        /// 다음 Patch seed 후보로 반환합니다. 자동 분할 계층만 사용하는 내부 계약입니다.
+        /// </summary>
+        internal static SurfacePatch BuildPartition(
+            ISurfaceProvider surfaces,
+            in SurfacePatchTriangle seedPlacement,
+            in Vector3 seedBarycentric,
+            in SurfacePatchBuildSettings settings,
+            ISurfaceConnectivity connectivity,
+            ISet<(SurfaceHandle Surface, int TriangleIndex)> excluded,
+            out List<SurfacePatchTriangle> frontier) =>
+            BuildInternal(
+                surfaces,
+                seedPlacement.Surface,
+                seedPlacement.TriangleIndex,
+                settings,
+                seedBarycentric,
+                connectivity,
+                excluded,
+                seedPlacement,
+                out frontier);
+
         /// <summary>공개 overload의 검증과 radius 원점 정책을 공유하는 실제 펼침 구현입니다.</summary>
         private static SurfacePatch BuildInternal(
             ISurfaceProvider surfaces,
@@ -78,6 +101,29 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             Vector3? seedBarycentric,
             ISurfaceConnectivity connectivity)
         {
+            return BuildInternal(
+                surfaces,
+                seedSurface,
+                seedTriangleIndex,
+                settings,
+                seedBarycentric,
+                connectivity,
+                null,
+                null,
+                out _);
+        }
+
+        private static SurfacePatch BuildInternal(
+            ISurfaceProvider surfaces,
+            SurfaceHandle seedSurface,
+            int seedTriangleIndex,
+            in SurfacePatchBuildSettings settings,
+            Vector3? seedBarycentric,
+            ISurfaceConnectivity connectivity,
+            ISet<(SurfaceHandle Surface, int TriangleIndex)> excluded,
+            SurfacePatchTriangle? seedPlacement,
+            out List<SurfacePatchTriangle> frontier)
+        {
             if (surfaces == null) throw new ArgumentNullException(nameof(surfaces));
             if (!surfaces.TryGetTopology(seedSurface, out SurfaceTopology seedTopology))
                 throw new ArgumentException("Seed surface is not available from the provider.", nameof(seedSurface));
@@ -85,13 +131,15 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                 throw new ArgumentOutOfRangeException(nameof(seedTriangleIndex));
             if (!seedTopology.IsTriangleTraversable(seedTriangleIndex))
                 throw new ArgumentException("Seed triangle is not traversable.", nameof(seedTriangleIndex));
+            if (excluded != null && excluded.Contains((seedSurface, seedTriangleIndex)))
+                throw new ArgumentException("Seed triangle is already assigned to another patch.", nameof(seedTriangleIndex));
 
+            frontier = new List<SurfacePatchTriangle>();
+            HashSet<(SurfaceHandle Surface, int TriangleIndex)> frontierKeys = new();
             Dictionary<(SurfaceHandle Surface, int TriangleIndex), SurfacePatchTriangle> unfolded = new();
             List<SurfacePatchTriangle> acceptedTriangles = new();
             Queue<(SurfaceHandle Surface, int TriangleIndex)> pending = new();
-            SurfacePatchTriangle seedTriangle = UnfoldSeed(seedTopology, seedTriangleIndex);
-            unfolded.Add((seedSurface, seedTriangleIndex), seedTriangle);
-            acceptedTriangles.Add(seedTriangle);
+            SurfacePatchTriangle seedTriangle = seedPlacement ?? UnfoldSeed(seedTopology, seedTriangleIndex);
             // SurfacePoint overload는 실제 seed를, Triangle index overload는 Face 무게중심을 radius
             // 원점으로 씁니다. chart의 임의 좌표 원점(A corner)에 의존하면 같은 Patch라도 seed 위치에
             // 따라 성장 범위가 비대칭이 되는 잘못된 extrinsic 정책이 됩니다.
@@ -100,6 +148,10 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                   seedTriangle.B * seedBarycentric.Value.y +
                   seedTriangle.C * seedBarycentric.Value.z
                 : (seedTriangle.A + seedTriangle.B + seedTriangle.C) / 3f;
+            Vector2 seedCentroid = (seedTriangle.A + seedTriangle.B + seedTriangle.C) / 3f;
+            seedTriangle = seedTriangle.WithGraphGeodesicDistance(Vector2.Distance(radiusOrigin, seedCentroid));
+            unfolded.Add((seedSurface, seedTriangleIndex), seedTriangle);
+            acceptedTriangles.Add(seedTriangle);
             pending.Enqueue((seedSurface, seedTriangleIndex));
             float maximumClosureError = 0f;
             bool wasTruncated = false;
@@ -131,18 +183,27 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                     }
 
                     (SurfaceHandle, int) neighborKey = (neighborSurface, neighborIndex);
+                    if (excluded != null && excluded.Contains(neighborKey)) continue;
                     if (!unfolded.TryGetValue(neighborKey, out SurfacePatchTriangle existing))
                     {
                         Vector2 centroid = (candidate.A + candidate.B + candidate.C) / 3f;
+                        Vector2 currentCentroid = (current.A + current.B + current.C) / 3f;
+                        float graphDistance = current.GraphGeodesicDistance +
+                                              Vector2.Distance(currentCentroid, centroid);
                         if (acceptedTriangleCount >= settings.MaximumTriangleCount ||
-                            Vector2.Distance(centroid, radiusOrigin) > settings.MaximumIntrinsicRadius)
+                            graphDistance > settings.MaximumIntrinsicRadius)
                         {
-                            // Radius는 정점이 아니라 Triangle 중심으로 판정합니다. 경계 Triangle 전체를
-                            // 포함할지는 다음 Region clipping 단계가 결정하므로 Patch 성장 정책은 단순합니다.
+                            // Face 중심 graph 거리는 Surface를 가로지르는 순회 경로의 상한입니다. chart
+                            // 직선거리만 쓰면 곡률이나 장애물을 가로질러 실제보다 짧게 판정할 수 있습니다.
                             wasTruncated = true;
+                            if (frontierKeys.Add(neighborKey))
+                            {
+                                frontier.Add(candidate);
+                            }
                             continue;
                         }
 
+                        candidate = candidate.WithGraphGeodesicDistance(graphDistance);
                         unfolded.Add(neighborKey, candidate);
                         acceptedTriangles.Add(candidate);
                         acceptedTriangleCount++;
@@ -161,13 +222,59 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                 }
             }
 
+            CalculateMetricDistortion(
+                surfaces,
+                acceptedTriangles,
+                out float maximumMetricDistortion,
+                out float averageMetricDistortion);
+            float maximumGraphDistance = 0f;
+            foreach (SurfacePatchTriangle triangle in acceptedTriangles)
+                maximumGraphDistance = Mathf.Max(maximumGraphDistance, triangle.GraphGeodesicDistance);
+
             return new SurfacePatch(
                 seedSurface,
                 seedTriangleIndex,
                 acceptedTriangles.ToArray(),
-                maximumClosureError,
-                wasTruncated,
-                closureToleranceExceeded);
+                new SurfacePatchDiagnostics(
+                    maximumClosureError,
+                    wasTruncated,
+                    closureToleranceExceeded,
+                    maximumGraphDistance,
+                    maximumMetricDistortion,
+                    averageMetricDistortion));
+        }
+
+        /// <summary>Face별 세 Edge의 3D/2D 상대 길이 오차를 집계합니다.</summary>
+        private static void CalculateMetricDistortion(
+            ISurfaceProvider surfaces,
+            IReadOnlyList<SurfacePatchTriangle> triangles,
+            out float maximum,
+            out float average)
+        {
+            maximum = 0f;
+            double sum = 0d;
+            int count = 0;
+            foreach (SurfacePatchTriangle patchTriangle in triangles)
+            {
+                if (!surfaces.TryGetTopology(patchTriangle.Surface, out SurfaceTopology topology)) continue;
+                SurfaceTriangle triangle = topology.Triangles[patchTriangle.TriangleIndex];
+                for (int edge = 0; edge < 3; edge++)
+                {
+                    int next = (edge + 1) % 3;
+                    float sourceLength = Vector3.Distance(
+                        topology.Positions[triangle.GetVertex(edge)],
+                        topology.Positions[triangle.GetVertex(next)]);
+                    float chartLength = Vector2.Distance(
+                        patchTriangle.GetCorner(edge),
+                        patchTriangle.GetCorner(next));
+                    float relativeError = Mathf.Abs(chartLength - sourceLength) /
+                                          Mathf.Max(sourceLength, EdgeLengthEpsilon);
+                    maximum = Mathf.Max(maximum, relativeError);
+                    sum += relativeError;
+                    count++;
+                }
+            }
+            average = count > 0 ? (float)(sum / count) : 0f;
         }
 
         /// <summary>

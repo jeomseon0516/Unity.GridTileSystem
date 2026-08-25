@@ -20,6 +20,12 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
         private readonly SurfacePoint[] _surfacePoints;
         /// <summary>세 개씩 한 Triangle을 구성하는 Geometry index 배열입니다.</summary>
         private readonly int[] _triangleIndices;
+        /// <summary>
+        /// 두 개씩 한 Edge를 구성하는 Tile 외곽선 index 배열입니다. Tile마다 내부 fragment 사이의
+        /// 공유 Edge(정확히 두 Triangle이 참조)는 제외하고, 정확히 한 Triangle만 참조하는 Edge만
+        /// 남긴 결과라 다중 fragment로 clipping된 Tile도 실제 육각형 윤곽만 남습니다.
+        /// </summary>
+        private readonly int[] _outlineIndices;
         /// <summary>내부 position 배열을 노출하지 않는 read-only view입니다.</summary>
         private readonly IReadOnlyList<Vector3> _positionsView;
         /// <summary>내부 normal 배열을 노출하지 않는 read-only view입니다.</summary>
@@ -32,6 +38,8 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
         private readonly IReadOnlyList<SurfacePoint> _surfacePointsView;
         /// <summary>내부 Triangle index 배열을 노출하지 않는 read-only view입니다.</summary>
         private readonly IReadOnlyList<int> _triangleIndicesView;
+        /// <summary>내부 Outline index 배열을 노출하지 않는 read-only view입니다.</summary>
+        private readonly IReadOnlyList<int> _outlineIndicesView;
 
         /// <summary>Surface local vertex 위치를 가져옵니다.</summary>
         public IReadOnlyList<Vector3> Positions => _positionsView;
@@ -48,6 +56,8 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
         public IReadOnlyList<SurfacePoint> SurfacePoints => _surfacePointsView;
         /// <summary>Triangle index buffer를 가져옵니다.</summary>
         public IReadOnlyList<int> TriangleIndices => _triangleIndicesView;
+        /// <summary>Tile 외곽선 Line index buffer를 가져옵니다.</summary>
+        public IReadOnlyList<int> OutlineIndices => _outlineIndicesView;
 
         /// <summary>Geometry builder가 소유한 연속 배열로 불변 snapshot을 생성합니다.</summary>
         internal SurfaceGridGeometry(
@@ -56,6 +66,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
             Vector2[] intrinsicPositions,
             int[] tileIndices,
             int[] triangleIndices,
+            int[] outlineIndices,
             SurfacePoint[] surfacePoints)
         {
             _positions = positions ?? throw new ArgumentNullException(nameof(positions));
@@ -63,12 +74,14 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Rendering
             _intrinsicPositions = intrinsicPositions ?? throw new ArgumentNullException(nameof(intrinsicPositions));
             _tileIndices = tileIndices ?? throw new ArgumentNullException(nameof(tileIndices));
             _triangleIndices = triangleIndices ?? throw new ArgumentNullException(nameof(triangleIndices));
+            _outlineIndices = outlineIndices ?? throw new ArgumentNullException(nameof(outlineIndices));
             _surfacePoints = surfacePoints ?? throw new ArgumentNullException(nameof(surfacePoints));
             _positionsView = Array.AsReadOnly(_positions);
             _normalsView = Array.AsReadOnly(_normals);
             _intrinsicPositionsView = Array.AsReadOnly(_intrinsicPositions);
             _tileIndicesView = Array.AsReadOnly(_tileIndices);
             _triangleIndicesView = Array.AsReadOnly(_triangleIndices);
+            _outlineIndicesView = Array.AsReadOnly(_outlineIndices);
             _surfacePointsView = Array.AsReadOnly(_surfacePoints);
         }
     }

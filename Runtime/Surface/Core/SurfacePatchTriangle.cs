@@ -18,6 +18,11 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
         public Vector2 B { get; }
         /// <summary>원본 Triangle corner C에 대응하는 2D 위치를 가져옵니다.</summary>
         public Vector2 C { get; }
+        /// <summary>
+        /// Seed에서 이 Face 중심까지 adjacency graph를 따라 누적한 intrinsic 거리 상한을 가져옵니다.
+        /// 직선 chart 거리와 달리 Surface를 가로지르는 실제 순회 경로 길이를 반영합니다.
+        /// </summary>
+        public float GraphGeodesicDistance { get; }
 
         /// <summary>corner 순서가 원본 winding과 일치하는 Face별 intrinsic embedding을 생성합니다.</summary>
         public SurfacePatchTriangle(
@@ -25,14 +30,20 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
             int triangleIndex,
             in Vector2 a,
             in Vector2 b,
-            in Vector2 c)
+            in Vector2 c,
+            float graphGeodesicDistance = 0f)
         {
             Surface = surface;
             TriangleIndex = triangleIndex;
             A = a;
             B = b;
             C = c;
+            GraphGeodesicDistance = graphGeodesicDistance;
         }
+
+        /// <summary>corner 배치를 유지하고 graph geodesic 거리만 지정한 복사본을 만듭니다.</summary>
+        public SurfacePatchTriangle WithGraphGeodesicDistance(float distance) =>
+            new(Surface, TriangleIndex, A, B, C, distance);
 
         /// <summary>이 Face가 지정한 Surface의 지정한 Triangle인지 검사합니다.</summary>
         public bool Matches(SurfaceHandle surface, int triangleIndex) =>

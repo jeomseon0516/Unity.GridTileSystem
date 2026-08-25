@@ -1,4 +1,5 @@
 using System;
+using Jeomseon.Unity.GridTileSystem.Surface.Adapters;
 using Jeomseon.Unity.GridTileSystem.Surface.Core;
 using Jeomseon.Unity.GridTileSystem.Surface.Query;
 using UnityEngine;
@@ -21,6 +22,10 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
         private readonly ISurfaceProvider _surfaces;
         /// <summary>경계 너머로 chart를 잇는 계층입니다. null이면 chart가 seed Surface에서 멈춥니다.</summary>
         private readonly ISurfaceConnectivity _connectivity;
+        /// <summary>기본 구성에서 시스템이 소유하며 명시적으로 무효화할 수 있는 연결 캐시입니다.</summary>
+        private readonly GeometrySurfaceConnectivity _ownedConnectivity;
+        /// <summary>local chart를 생성하는 교체 가능한 수학 계층입니다.</summary>
+        private readonly ISurfaceParameterizer _parameterizer;
         /// <summary>기본 구성에서 이 시스템이 직접 만들어 수명을 책임지는 query입니다.</summary>
         private readonly GeometrySurfaceQuery _ownedQuery;
 
@@ -38,7 +43,9 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             _ownedQuery = query ?? throw new ArgumentNullException(nameof(query));
             _query = query;
             _surfaces = query;
-            _connectivity = new GeometrySurfaceConnectivity(query, query);
+            _ownedConnectivity = new GeometrySurfaceConnectivity(query, query);
+            _connectivity = _ownedConnectivity;
+            _parameterizer = new TriangleUnfoldingSurfaceParameterizer();
         }
 
         /// <summary>질의와 provider를 각각 주입합니다. 수명은 호출자가 관리합니다.</summary>
@@ -52,11 +59,23 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
         /// chart는 seed Surface 안에서만 확장됩니다.
         /// </summary>
         public SurfaceGridSystem(ISurfaceQuery query, ISurfaceProvider surfaces, ISurfaceConnectivity connectivity)
+            : this(query, surfaces, connectivity, new TriangleUnfoldingSurfaceParameterizer())
+        {
+        }
+
+        /// <summary>질의, provider, 연결 계층과 Parameterizer를 각각 주입합니다.</summary>
+        public SurfaceGridSystem(
+            ISurfaceQuery query,
+            ISurfaceProvider surfaces,
+            ISurfaceConnectivity connectivity,
+            ISurfaceParameterizer parameterizer)
         {
             _query = query ?? throw new ArgumentNullException(nameof(query));
             _surfaces = surfaces ?? throw new ArgumentNullException(nameof(surfaces));
             _connectivity = connectivity;
+            _parameterizer = parameterizer ?? throw new ArgumentNullException(nameof(parameterizer));
             _ownedQuery = null;
+            _ownedConnectivity = null;
         }
 
         /// <summary>
@@ -76,8 +95,15 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             SurfaceGrid grid;
             try
             {
+                // Heightfield Terrain은 전체가 local XZ에 대해 단일값 함수이므로 높이와 무관한 XZ를
+                // chart로 쓰면 강한 굴곡에서도 접히거나 겹치지 않습니다. 실제 높이는 barycentric
+                // binding으로 복원합니다.
+                ISurfaceParameterizer parameterizer = hit.Topology is TerrainSurfaceTopology
+                    ? new TerrainHeightfieldParameterizer()
+                    : _parameterizer;
                 grid = SurfaceGridBuilder.Build(
-                    _surfaces, hit.Point, request.TileRadius, request.PatchSettings, surfaceDirection, _connectivity);
+                    _surfaces, hit.Point, request.TileRadius, request.PatchSettings, surfaceDirection, _connectivity,
+                    parameterizer);
             }
             catch (ArgumentException exception)
             {
@@ -105,8 +131,18 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             return SurfaceGridBuildResult.Success(grid, hit.Adapter, hit.Topology, hit.Point);
         }
 
-        /// <summary>이 시스템이 직접 만든 query가 캐시한 Adapter와 topology를 해제합니다.</summary>
-        public void Dispose() => _ownedQuery?.Clear();
+        /// <summary>
+        /// 이 시스템이 소유한 연결 결과, boundary 색인, Adapter와 topology 캐시를 비웁니다.
+        /// Scene geometry가 바뀐 뒤 다시 Build하기 전에 호출합니다.
+        /// </summary>
+        public void Clear()
+        {
+            _ownedConnectivity?.Clear();
+            _ownedQuery?.Clear();
+        }
+
+        /// <summary>이 시스템이 소유한 모든 캐시를 해제합니다.</summary>
+        public void Dispose() => Clear();
 
         /// <summary>월드 초기 방향을 seed 표면의 local 방향으로 옮깁니다.</summary>
         private static Vector3 ToSurfaceDirection(in SurfaceQueryHit hit, in Vector3 worldDirection)

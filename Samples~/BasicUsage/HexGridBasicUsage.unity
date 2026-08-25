@@ -163,7 +163,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10302, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -277,19 +277,14 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   settings: {fileID: 11400000, guid: 63711e16820e4067bd5326c05bf7c34e, type: 2}
-  receivers:
-  - sourceMeshFilter: {fileID: 861021110}
-    surfaceCollider: {fileID: 861021109}
-    outputMeshFilter: {fileID: 1376087136}
-    outputMeshRenderer: {fileID: 1376087138}
-    seedTriangleIndex: 100
-    seedBarycentric: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
-    tiles: []
   mainCamera: {fileID: 1460498979}
-  maximumPatchTriangles: 4096
-  maximumPatchRadius: 100
-  maximumClosureError: 0.01
+  seedAnchor: {fileID: 0}
+  seedOffset: {x: -0.9333335, y: -4, z: -1.8666667}
+  initialDirection: {x: 0, y: 0, z: 0}
+  outputMeshFilter: {fileID: 1376087136}
+  outputMeshRenderer: {fileID: 1376087138}
   surfaceOffset: 0.002
+  tiles: []
 --- !u!114 &1376087139
 MonoBehaviour:
   m_ObjectHideFlags: 0

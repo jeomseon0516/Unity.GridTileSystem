@@ -7,8 +7,12 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
     /// <summary>볼록 intrinsic polygon을 펼쳐진 Surface Triangle과 clipping하여 Surface Region을 생성합니다.</summary>
     public static class SurfaceRegionBuilder
     {
-        /// <summary>경계 위의 점을 부동소수점 오차로 외부 판정하지 않기 위한 거리성 허용 오차입니다.</summary>
-        private const float BoundaryTolerance = 0.000001f;
+        // 경계 위의 점을 부동소수점 오차로 외부 판정하지 않기 위한 거리성 허용 오차입니다. 같은
+        // 물리적 교점이라도 어느 clip 단계를 거쳤는지에 따라 float32 반올림 오차가 몇 ULP씩
+        // 달라질 수 있고(좌표 크기 ~10~20 범위에서 실측 오차 ~1e-6), 예전 1e-6은 그 오차 자체와
+        // 크기가 같아 AppendDistinct의 clip-내부 중복 제거가 실패했습니다(SurfaceRegionCanonicalizer의
+        // Tolerance와 같은 이유로 함께 올림). 정상적인 최소 Tile 반지름(0.025)보다는 훨씬 작습니다.
+        private const float BoundaryTolerance = 0.0001f;
 
         /// <summary>
         /// 반시계 또는 시계 방향의 볼록 polygon과 Patch Triangle의 교집합을 계산합니다.
@@ -33,7 +37,13 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
         /// </summary>
         public static SurfaceRegion Build(
             SurfacePatch patch,
-            IReadOnlyList<Vector2> convexPolygon)
+            IReadOnlyList<Vector2> convexPolygon) => Build(patch, convexPolygon, null);
+
+        /// <summary>Grid build 범위의 canonical 좌표 캐시를 공유하며 Region을 만듭니다.</summary>
+        internal static SurfaceRegion Build(
+            SurfacePatch patch,
+            IReadOnlyList<Vector2> convexPolygon,
+            SurfaceRegionCanonicalizer canonicalizer)
         {
             if (patch == null) throw new ArgumentNullException(nameof(patch));
             if (convexPolygon == null) throw new ArgumentNullException(nameof(convexPolygon));
@@ -58,9 +68,15 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                 int firstVertex = vertices.Count;
                 foreach (Vector2 point in clipped)
                 {
+                    Vector2 canonicalPoint = canonicalizer?.Canonicalize(point) ?? point;
+                    // canonicalPoint는 인접 fragment가 동일한 intrinsic 경계 좌표를 공유하기 위한 표시
+                    // 좌표입니다. 다른 Face에서 먼저 등록된 값으로 최대 tolerance만큼 이동할 수 있으므로
+                    // 현재 Face의 Surface binding까지 그 값으로 계산하면 가는 Triangle(Terrain heightmap
+                    // 등)에서는 barycentric 오차가 증폭돼 Face 밖으로 벗어날 수 있습니다. binding은
+                    // clipping이 보장한 현재 Face 내부의 원래 point에서 계산해야 합니다.
                     Vector3 barycentric = CalculateBarycentric(patchTriangle, point);
                     SurfacePoint surfacePoint = new(patchTriangle.Surface, patchTriangle.TriangleIndex, barycentric);
-                    vertices.Add(new SurfaceRegionVertex(point, surfacePoint));
+                    vertices.Add(new SurfaceRegionVertex(canonicalPoint, surfacePoint));
                 }
 
                 // 볼록 polygon은 첫 vertex를 중심으로 fan triangulation할 수 있습니다.
@@ -129,15 +145,37 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
                 bool currentInside = IsInside(clipStart, clipEnd, current);
                 if (currentInside != previousInside)
                 {
-                    output.Add(IntersectSegmentWithLine(previous, current, clipStart, clipEnd));
+                    AppendDistinct(output, IntersectSegmentWithLine(previous, current, clipStart, clipEnd));
                 }
-                if (currentInside) output.Add(current);
+                if (currentInside) AppendDistinct(output, current);
 
                 previous = current;
                 previousInside = currentInside;
             }
 
+            // 닫힌 고리이므로 마지막과 첫 점이 겹칠 수도 있습니다(예: subject의 마지막 vertex가 정확히
+            // clip 경계 위에 있어 intersection과 그 vertex 자체가 같은 위치인 경우).
+            if (output.Count > 1 && (output[0] - output[^1]).sqrMagnitude <= BoundaryTolerance * BoundaryTolerance)
+                output.RemoveAt(output.Count - 1);
+
             return output;
+        }
+
+        /// <summary>
+        /// subject vertex가 clip 경계 위에 정확히(오차 이내) 있으면 Sutherland-Hodgman의 intersection
+        /// 계산과 그 vertex 자체가 같은 점을 만듭니다. 중복 점을 그대로 두면 두 점 사이 zero-length
+        /// Edge가 fan triangulation에 남아 반대편 fragment와 만나야 할 경계 Edge의 quantize 식별이
+        /// 어긋납니다(공유 Edge count가 정확히 2가 아니라 3~4로 뒤섞임). 여러 clip 단계를 거치며 이미
+        /// 들어간 점과(바로 앞이 아니어도) 겹칠 수 있으므로 전체 목록을 확인합니다. Region 하나의
+        /// 점 개수가 많지 않아 비용은 무시할 만합니다.
+        /// </summary>
+        private static void AppendDistinct(List<Vector2> output, in Vector2 point)
+        {
+            for (int i = 0; i < output.Count; i++)
+            {
+                if ((output[i] - point).sqrMagnitude <= BoundaryTolerance * BoundaryTolerance) return;
+            }
+            output.Add(point);
         }
 
         /// <summary>점이 반시계 clip Edge의 왼쪽 또는 허용 오차 내 경계에 있는지 검사합니다.</summary>
@@ -198,5 +236,49 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Core
         private static bool IsFinite(in Vector2 value) =>
             !float.IsNaN(value.x) && !float.IsInfinity(value.x) &&
             !float.IsNaN(value.y) && !float.IsInfinity(value.y);
+    }
+
+    /// <summary>
+    /// 서로 다른 Tile clipping이 같은 intrinsic 교점을 계산하면 최초 좌표 하나로 통일합니다.
+    /// quantization은 lookup에만 사용하고 실제 좌표를 반올림하지 않으므로 Grid 전체가 이동하지 않습니다.
+    /// </summary>
+    internal sealed class SurfaceRegionCanonicalizer
+    {
+        // 같은 물리적 교점이라도 어느 Patch Triangle에서 계산됐는지에 따라 float32 반올림 오차가
+        // 몇 ULP씩 어긋날 수 있습니다(예: 좌표 크기 ~10~20 범위에서 실측 오차 ~1e-6). 1e-6은 이
+        // 오차 자체와 크기가 같아 실측 실패가 나서, 정상적인 최소 Tile 반지름(0.025)보다는 훨씬
+        // 작으면서 float32 노이즈는 넉넉히 흡수하는 값으로 올렸습니다.
+        private const float Tolerance = 0.0001f;
+        private readonly Dictionary<(long X, long Y), Vector2> _vertices = new();
+
+        /// <summary>
+        /// 같은 물리적 교점도 계산 경로(어느 Patch Triangle에서 clipping됐는지)에 따라 부동소수점
+        /// 결과가 미세하게 달라질 수 있고, 그 차이가 quantize 격자 칸 경계를 사이에 두면 자기 칸
+        /// 하나만 조회해서는 이미 등록된 같은 점을 놓칩니다. 인접 3x3 칸을 모두 조회하고, 새로
+        /// 등록할 때도 3x3 칸 전부에 등록해 어느 방향에서 반올림되어 오더라도 같은 항목을 찾도록
+        /// 합니다.
+        /// </summary>
+        public Vector2 Canonicalize(in Vector2 point)
+        {
+            long centerX = (long)Math.Round(point.x / Tolerance);
+            long centerY = (long)Math.Round(point.y / Tolerance);
+
+            for (long dx = -1; dx <= 1; dx++)
+            {
+                for (long dy = -1; dy <= 1; dy++)
+                {
+                    if (_vertices.TryGetValue((centerX + dx, centerY + dy), out Vector2 candidate) &&
+                        (candidate - point).sqrMagnitude <= Tolerance * Tolerance)
+                    {
+                        return candidate;
+                    }
+                }
+            }
+
+            for (long dx = -1; dx <= 1; dx++)
+                for (long dy = -1; dy <= 1; dy++)
+                    _vertices[(centerX + dx, centerY + dy)] = point;
+            return point;
+        }
     }
 }

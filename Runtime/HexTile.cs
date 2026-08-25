@@ -207,17 +207,5 @@ namespace Jeomseon.Unity.GridTileSystem
         {
             SafeData.CopyUserStateFrom(source.SafeData);
         }
-
-        #if UNITY_EDITOR
-        private void HandleActiveChangedInEditor()
-        {
-            onChangedActive.Invoke(this, SafeData.IsActive);
-        }
-
-        private void HandleColorChangedInEditor()
-        {
-            onChangedColor.Invoke(this, SafeData.Color);
-        }
-        #endif
     }
 }

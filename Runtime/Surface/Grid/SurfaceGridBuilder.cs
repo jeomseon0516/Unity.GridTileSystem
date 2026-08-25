@@ -10,6 +10,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
     {
         /// <summary>완전 포함 면적 비교에서 누적 clipping 오차를 허용하는 상대 오차입니다.</summary>
         private const float FullTileAreaRelativeTolerance = 0.0001f;
+        private static readonly ISurfaceParameterizer DefaultParameterizer = new TriangleUnfoldingSurfaceParameterizer();
 
         /// <summary>
         /// Seed가 속한 Triangle에서 local chart를 만들고, 그 chart 전체를 덮는 Hex Region을 생성합니다.
@@ -78,7 +79,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             float tileRadius,
             in SurfacePatchBuildSettings patchSettings,
             float rotation) =>
-            BuildCore(surfaces, seed, tileRadius, patchSettings, rotation, Vector3.zero, null);
+            BuildCore(surfaces, seed, tileRadius, patchSettings, rotation, Vector3.zero, null, DefaultParameterizer);
 
         /// <summary>
         /// 연결 계층을 함께 받아 chart가 Surface 경계를 넘어 확장될 수 있는 Grid를 생성합니다.
@@ -91,7 +92,19 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             in SurfacePatchBuildSettings patchSettings,
             in Vector3 initialSurfaceDirection,
             ISurfaceConnectivity connectivity) =>
-            BuildCore(surfaces, seed, tileRadius, patchSettings, 0f, initialSurfaceDirection, connectivity);
+            BuildCore(surfaces, seed, tileRadius, patchSettings, 0f, initialSurfaceDirection, connectivity, DefaultParameterizer);
+
+        /// <summary>연결 계층과 Parameterizer를 모두 지정해 Grid를 생성합니다.</summary>
+        public static SurfaceGrid Build(
+            ISurfaceProvider surfaces,
+            in SurfacePoint seed,
+            float tileRadius,
+            in SurfacePatchBuildSettings patchSettings,
+            in Vector3 initialSurfaceDirection,
+            ISurfaceConnectivity connectivity,
+            ISurfaceParameterizer parameterizer) =>
+            BuildCore(surfaces, seed, tileRadius, patchSettings, 0f, initialSurfaceDirection, connectivity,
+                parameterizer ?? throw new ArgumentNullException(nameof(parameterizer)));
 
         /// <summary>
         /// Surface local 방향을 격자 초기 방향으로 삼아 provider 기반 Grid를 생성합니다. seed Face의
@@ -103,7 +116,7 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             float tileRadius,
             in SurfacePatchBuildSettings patchSettings,
             in Vector3 initialSurfaceDirection) =>
-            BuildCore(surfaces, seed, tileRadius, patchSettings, 0f, initialSurfaceDirection, null);
+            BuildCore(surfaces, seed, tileRadius, patchSettings, 0f, initialSurfaceDirection, null, DefaultParameterizer);
 
         /// <summary>
         /// 회전각 또는 Surface local 초기 방향 중 하나로 격자 방향을 결정하는 실제 구현입니다.
@@ -116,7 +129,8 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             in SurfacePatchBuildSettings patchSettings,
             float rotation,
             in Vector3 initialSurfaceDirection,
-            ISurfaceConnectivity connectivity)
+            ISurfaceConnectivity connectivity,
+            ISurfaceParameterizer parameterizer)
         {
             if (surfaces == null) throw new ArgumentNullException(nameof(surfaces));
             if (!seed.IsValid) throw new ArgumentException("Seed must be a valid surface point.", nameof(seed));
@@ -125,14 +139,18 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
             if (tileRadius <= 0f || float.IsNaN(tileRadius) || float.IsInfinity(tileRadius))
                 throw new ArgumentOutOfRangeException(nameof(tileRadius));
 
-            SurfacePatch patch = TriangleUnfoldingParameterizer.Build(surfaces, seed, patchSettings, connectivity);
+            SurfacePatchSet patchSet = parameterizer.Parameterize(surfaces, seed, patchSettings, connectivity);
+            SurfacePatch patch = patchSet.PrimaryPatch;
             SurfacePatchTriangle seedTriangle = FindPatchTriangle(patch, seed);
             Vector2 seedIntrinsic = seedTriangle.A * seed.Barycentric.x +
                                     seedTriangle.B * seed.Barycentric.y +
                                     seedTriangle.C * seed.Barycentric.z;
             IntrinsicHexLayout layout = new(seedIntrinsic, tileRadius, ResolveRotation(topology, seedTriangle, rotation, initialSurfaceDirection));
             List<SurfaceGridTileRegion> tiles = new();
-            Rect bounds = patch.IntrinsicBounds;
+            Rect bounds = CalculateBounds(patchSet.Patches);
+            int candidateTileCount = 0;
+            int regionBuildCount = 0;
+            SurfaceRegionCanonicalizer canonicalizer = new();
 
             // 격자 좌표계에서 중심 x는 q에만 의존하므로 q 구간을 먼저 확정하고, 각 열의 r 구간을 구합니다.
             // 회전이 있으면 layout이 경계를 격자 좌표계로 역회전해 보수적인 구간을 돌려주므로 여기서는
@@ -143,18 +161,101 @@ namespace Jeomseon.Unity.GridTileSystem.Surface.Grid
                 layout.GetRowRange(bounds, q, out int minimumR, out int maximumR);
                 for (int r = minimumR; r <= maximumR; r++)
                 {
+                    candidateTileCount++;
                     AxialCoordinates axial = new(q, r);
                     Vector2 center = layout.GetCenter(axial);
                     Vector2[] corners = layout.GetCorners(axial);
+                    // AABB는 회전한 chart에서 넓은 여백을 포함합니다. Patch corner의 볼록 껍질과도
+                    // 겹치지 않는 Hex는 clipping 전에 제거할 수 있으며, hull은 실제 Patch를 완전히
+                    // 포함하므로 이 판정은 유효 Tile을 누락하지 않습니다.
+                    if (!OverlapsAnyPatch(patchSet.Patches, corners)) continue;
+                    regionBuildCount++;
                     // chart가 여러 Surface에 걸칠 수 있으므로 Region은 Face별 Surface identity를 씁니다.
-                    SurfaceRegion region = SurfaceRegionBuilder.Build(patch, corners);
+                    SurfaceRegion region = BuildCombinedRegion(patchSet.Patches, corners, canonicalizer);
                     if (!CoversEntirePolygon(region, corners)) continue;
 
                     tiles.Add(new SurfaceGridTileRegion(new HexCoordinates(q, r), center, region));
                 }
             }
 
-            return new SurfaceGrid(patch, layout, tiles.ToArray());
+            return new SurfaceGrid(patchSet, layout, tiles.ToArray(), candidateTileCount, regionBuildCount);
+        }
+
+        private static Rect CalculateBounds(IReadOnlyList<SurfacePatch> patches)
+        {
+            Rect bounds = patches[0].IntrinsicBounds;
+            for (int i = 1; i < patches.Count; i++)
+            {
+                Rect next = patches[i].IntrinsicBounds;
+                bounds = Rect.MinMaxRect(
+                    Mathf.Min(bounds.xMin, next.xMin),
+                    Mathf.Min(bounds.yMin, next.yMin),
+                    Mathf.Max(bounds.xMax, next.xMax),
+                    Mathf.Max(bounds.yMax, next.yMax));
+            }
+            return bounds;
+        }
+
+        private static bool OverlapsAnyPatch(
+            IReadOnlyList<SurfacePatch> patches,
+            IReadOnlyList<Vector2> polygon)
+        {
+            foreach (SurfacePatch patch in patches)
+            {
+                if (ConvexPolygonsOverlap(patch.IntrinsicHull, polygon)) return true;
+            }
+            return false;
+        }
+
+        private static SurfaceRegion BuildCombinedRegion(
+            IReadOnlyList<SurfacePatch> patches,
+            IReadOnlyList<Vector2> polygon,
+            SurfaceRegionCanonicalizer canonicalizer)
+        {
+            List<SurfaceRegionVertex> vertices = new();
+            List<int> indices = new();
+            foreach (SurfacePatch patch in patches)
+            {
+                SurfaceRegion partial = SurfaceRegionBuilder.Build(patch, polygon, canonicalizer);
+                int offset = vertices.Count;
+                vertices.AddRange(partial.Vertices);
+                foreach (int index in partial.TriangleIndices) indices.Add(offset + index);
+            }
+            return new SurfaceRegion(vertices.ToArray(), indices.ToArray());
+        }
+
+        /// <summary>분리축 정리로 두 반시계 볼록 polygon의 교차 가능성을 검사합니다.</summary>
+        private static bool ConvexPolygonsOverlap(IReadOnlyList<Vector2> first, IReadOnlyList<Vector2> second) =>
+            !HasSeparatingAxis(first, second) && !HasSeparatingAxis(second, first);
+
+        private static bool HasSeparatingAxis(IReadOnlyList<Vector2> axesSource, IReadOnlyList<Vector2> other)
+        {
+            for (int edge = 0; edge < axesSource.Count; edge++)
+            {
+                Vector2 start = axesSource[edge];
+                Vector2 end = axesSource[(edge + 1) % axesSource.Count];
+                Vector2 direction = end - start;
+                Vector2 axis = new(-direction.y, direction.x);
+                Project(axesSource, axis, out float firstMinimum, out float firstMaximum);
+                Project(other, axis, out float secondMinimum, out float secondMaximum);
+                if (firstMaximum < secondMinimum || secondMaximum < firstMinimum) return true;
+            }
+            return false;
+        }
+
+        private static void Project(
+            IReadOnlyList<Vector2> polygon,
+            in Vector2 axis,
+            out float minimum,
+            out float maximum)
+        {
+            minimum = maximum = Vector2.Dot(polygon[0], axis);
+            for (int i = 1; i < polygon.Count; i++)
+            {
+                float projection = Vector2.Dot(polygon[i], axis);
+                if (projection < minimum) minimum = projection;
+                if (projection > maximum) maximum = projection;
+            }
         }
 
         /// <summary>초기 방향이 주어졌으면 chart 회전각으로 변환하고, 없으면 지정된 회전각을 씁니다.</summary>

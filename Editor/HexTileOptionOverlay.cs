@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using UnityEditor;
 using UnityEditor.Overlays;
 using UnityEditor.UIElements;
@@ -14,6 +15,9 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
         private VisualElement _root;
         private ScrollView _propertyScrollView;
         private SerializedProperty _hexProperty;
+        public Action VisualsChanged { private get; set; }
+
+        public HexTileOptionOverlay() { }
 
         public override VisualElement CreatePanelContent()
         {
@@ -27,7 +31,7 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
                 _propertyScrollView.style.opacity = change.newValue);
             _root.Add(opacitySlider);
 
-            _propertyScrollView = new ScrollView { style = { maxHeight = 300, opacity = opacitySlider.value } };
+            _propertyScrollView = new ScrollView { style = { height = 300, opacity = opacitySlider.value } };
             _root.Add(_propertyScrollView);
             RefreshContent();
             return _root;
@@ -56,14 +60,12 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
 
             _propertyScrollView.Clear();
 
-            if (_hexProperty is null)
-            {
-                return;
-            }
+            if (_hexProperty is null) return;
 
-            var propertyField = new PropertyField(_hexProperty);
-            propertyField.Bind(_hexProperty.serializedObject);
+            PropertyField propertyField = new(_hexProperty);
+            propertyField.RegisterCallback<SerializedPropertyChangeEvent>(_ => VisualsChanged?.Invoke());
             _propertyScrollView.Add(propertyField);
+            propertyField.Bind(_hexProperty.serializedObject);
         }
     }
 }

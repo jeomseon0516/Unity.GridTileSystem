@@ -13,4 +13,15 @@ MonoBehaviour:
   m_Name: HexGridSettings
   m_EditorClassIdentifier: Jeomseon.Unity.GridTileSystem::Jeomseon.Unity.GridTileSystem.HexGridSettings
   tileRadius: 0.5
-  interactionLayerMask: 8
+  interactionLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  seedSearchRadius: 0.25
+  surfaceLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  preferredSurfaceDirection: {x: 0, y: -1, z: 0}
+  splitPatchWhenLimitReached: 1
+  maximumPatchTriangles: 4096
+  maximumPatchRadius: 100
+  maximumClosureError: 0.01

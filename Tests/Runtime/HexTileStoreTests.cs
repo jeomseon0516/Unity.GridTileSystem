@@ -55,12 +55,14 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             HexTileStore store = CreateStore(tiles);
             store.TryGetTile(new HexCoordinates(0, 0), out HexTile first);
             first.AddProperty("marker");
+            first.Data.DrawPolicy = new OutlineDrawPolicy();
             store.Bake(_topology, _grid, _surfaceHost.transform);
 
             store.TryGetTile(new HexCoordinates(0, 0), out HexTile second);
             Assert.That(tiles, Has.Count.EqualTo(_grid.Tiles.Count));
             Assert.That(second, Is.Not.SameAs(first));
             Assert.That(second.Properties, Does.Contain("marker"));
+            Assert.That(second.Data.DrawPolicy, Is.SameAs(first.Data.DrawPolicy));
         }
 
         [Test]
@@ -112,7 +114,8 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             _surfaceHost.transform.position = new Vector3(0f, 4f, 0f);
             List<HexTile> translatedTiles = new();
             CreateStore(translatedTiles);
-            Assert.That(translatedTiles[0].TilePosition, Is.EqualTo(identityPosition + Vector3.up * 4f));
+            Assert.That(Vector3.Distance(translatedTiles[0].TilePosition, identityPosition + Vector3.up * 4f),
+                Is.LessThan(0.00001f));
         }
 
         private HexTileStore CreateStore(List<HexTile> tiles)

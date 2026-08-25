@@ -1,6 +1,6 @@
 {
   "name": "com.jeomseon.unity.grid-tile-system",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "displayName": "Jeomseon Unity Grid Tile System",
   "description": "Triangle topology와 intrinsic Surface Space 기반 육각 Grid, 상호작용 및 파이프라인 비종속 Mesh 시각화를 제공합니다.",
   "unity": "6000.5",
@@ -10,6 +10,8 @@
     "com.jeomseon.unity.attributes": "0.2.1",
     "com.jeomseon.unity.core": "0.1.2",
     "com.jeomseon.unity.editor-toolkit": "0.5.0",
+    "com.unity.burst": "1.8.30",
+    "com.unity.collections": "2.6.8",
     "com.unity.inputsystem": "1.7.0"
   },
   "keywords": [

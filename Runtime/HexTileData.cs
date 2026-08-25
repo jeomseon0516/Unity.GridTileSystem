@@ -22,6 +22,9 @@ namespace Jeomseon.Unity.GridTileSystem
         [SerializeField] private bool isActive = true;
         /// <summary>타일 시각화 색상입니다.</summary>
         [SerializeField] private Color color = Color.cyan;
+        /// <summary>Settings의 기본 Draw Policy를 override합니다. 비어 있으면 기본값을 그대로 따릅니다.</summary>
+        [SerializeField, SerializeReference, SerializeReferenceSelector]
+        private IHexTileDrawPolicy drawPolicy;
 
         /// <summary>사용자 문자열 속성의 읽기 전용 목록을 가져옵니다.</summary>
         public IReadOnlyList<string> Properties => properties;
@@ -42,6 +45,11 @@ namespace Jeomseon.Unity.GridTileSystem
         public bool IsActive { get => isActive; set => isActive = value; }
         /// <summary>시각화 색상을 가져오거나 설정합니다.</summary>
         public Color Color { get => color; set => color = value; }
+        /// <summary>
+        /// 이 Tile의 Draw Mode override를 가져오거나 설정합니다. <c>null</c>이면 override가 없다는
+        /// 뜻이며, Controller가 자신의 기본 Draw Policy로 fallback합니다.
+        /// </summary>
+        public IHexTileDrawPolicy DrawPolicy { get => drawPolicy; set => drawPolicy = value; }
 
         /// <summary>모든 위치와 Bake 순서 인덱스를 포함한 타일 데이터를 생성합니다.</summary>
         public HexTileData(int q, int r, in Vector3 tilePosition, in Vector2 intrinsicPosition, int index)
@@ -72,6 +80,7 @@ namespace Jeomseon.Unity.GridTileSystem
             properties.AddRange(source.properties);
             isActive = source.isActive;
             color = source.color;
+            drawPolicy = source.drawPolicy;
         }
 
     }

@@ -1,0 +1,20 @@
+{
+  "name": "Jeomseon.Unity.GridTileSystem.PlayModeTests",
+  "rootNamespace": "Jeomseon.Unity.GridTileSystem.Tests",
+  "references": [
+    "Jeomseon.Unity.GridTileSystem",
+    "Unity.InputSystem"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

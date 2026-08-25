@@ -4,6 +4,7 @@ using Jeomseon.Unity.GridTileSystem.Surface.Adapters;
 using Jeomseon.Unity.GridTileSystem.Surface.Core;
 using Jeomseon.Unity.GridTileSystem.Surface.Grid;
 using Jeomseon.Unity.GridTileSystem.Surface.Query;
+using Jeomseon.Unity.GridTileSystem.Surface.Rendering;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -61,6 +62,22 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
 
             Assert.That(connectivity.CachedQueryCount, Is.EqualTo(afterFirst));
             Assert.That(world.DiscoverCallCount, Is.EqualTo(discoveriesAfterFirst), "A cached edge must not be re-resolved.");
+        }
+
+        [Test]
+        public void Connectivity_Clear_DiscardsResolvedLinksAndBoundaryIndices()
+        {
+            StubWorld world = StubWorld.CreateAdjacentPlanes();
+            GeometrySurfaceConnectivity connectivity = new(world, world);
+
+            Assert.That(TryFindAnyLink(world, world.Left, connectivity, out _), Is.True);
+            int discoveriesBeforeClear = world.DiscoverCallCount;
+
+            connectivity.Clear();
+
+            Assert.That(connectivity.CachedQueryCount, Is.Zero);
+            Assert.That(TryFindAnyLink(world, world.Left, connectivity, out _), Is.True);
+            Assert.That(world.DiscoverCallCount, Is.GreaterThan(discoveriesBeforeClear));
         }
 
         [Test]
@@ -128,6 +145,29 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
         }
 
         [Test]
+        public void Grid_AutomaticSplitAcrossLink_ReportsEveryCoveredSurface()
+        {
+            StubWorld world = StubWorld.CreateAdjacentPlanes();
+            GeometrySurfaceConnectivity connectivity = new(world, world);
+            SurfacePoint seed = new(world.Left, 0, new Vector3(0.5f, 0.25f, 0.25f));
+            SurfacePatchBuildSettings settings = new(
+                2, float.PositiveInfinity, float.PositiveInfinity, true);
+
+            SurfaceGrid grid = SurfaceGridBuilder.Build(
+                world, seed, 0.25f, settings, Vector3.zero, connectivity);
+
+            Assert.That(grid.Patches, Has.Count.GreaterThanOrEqualTo(2));
+            Assert.That(grid.SpansMultipleSurfaces, Is.True);
+            Assert.That(grid.Surfaces, Is.EquivalentTo(new[] { world.Left, world.Right }));
+            Assert.That(world.TryGetTopology(world.Left, out SurfaceTopology left), Is.True);
+            Assert.That(() => SurfaceGridGeometryBuilder.Build(left, grid), Throws.ArgumentException);
+            SurfaceGridChunk chunk = SurfaceGridChunk.FromTile(grid.Tiles[0].Coordinates, 1);
+            SurfaceGridGeometry chunkGeometry = SurfaceGridChunkGeometryBuilder.Build(
+                world, world, grid, chunk, 1, Matrix4x4.identity);
+            Assert.That(chunkGeometry.Positions, Is.Not.Empty);
+        }
+
+        [Test]
         public void Grid_WithoutConnectivity_StaysOnTheSeedSurface()
         {
             StubWorld world = StubWorld.CreateAdjacentPlanes();
@@ -136,7 +176,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             SurfaceGrid grid = SurfaceGridBuilder.Build(
                 world, seed, 0.25f, SurfacePatchBuildSettings.Unlimited, Vector3.zero, null);
 
-            Assert.That(grid.Patch.SpansMultipleSurfaces, Is.False);
+            Assert.That(grid.SpansMultipleSurfaces, Is.False);
             foreach (SurfaceGridTileRegion tile in grid.Tiles)
             {
                 foreach (SurfaceRegionVertex vertex in tile.Region.Vertices)
@@ -162,9 +202,10 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
         }
 
         [Test]
-        public void Patch_LimitedGrowth_NeverTouchesSurfacesItDoesNotReach()
+        public void Patch_LimitedGrowth_DoesNotExpandIntoSurfacesItDoesNotReach()
         {
-            // S-I의 lazy 절반: 성장이 멈춘 뒤의 Surface는 topology조차 만들지 않아야 합니다.
+            // 후보 탐색 반경 안의 Surface는 Edge 대조를 위해 topology를 한 번 볼 수 있지만,
+            // 실제로 도달하지 않은 Surface에서 재귀적으로 chart를 확장해서는 안 됩니다.
             StubWorld world = StubWorld.CreateChain(3);
             GeometrySurfaceConnectivity connectivity = new(world, world);
             SurfacePoint seed = new(world.Chain[0], 0, new Vector3(0.5f, 0.25f, 0.25f));
@@ -174,8 +215,10 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
 
             Assert.That(patch.WasTruncated, Is.True);
             Assert.That(patch.SpansMultipleSurfaces, Is.False);
-            Assert.That(world.TopologyRequests(world.Chain[2]), Is.EqualTo(0),
-                "The far surface must never be built when the chart never reaches its boundary.");
+            Assert.That(patch.Triangles.Select(triangle => triangle.Surface),
+                Is.All.EqualTo(world.Chain[0]));
+            Assert.That(world.TopologyRequests(world.Chain[2]), Is.LessThanOrEqualTo(1),
+                "A nearby candidate may be inspected once, but traversal must not continue from it.");
         }
 
         [Test]
@@ -231,7 +274,7 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
         /// Physics 없이 topology 몇 개만 들고 있는 월드 대역입니다. Adapter의 Transform이 없으면
         /// topology가 이미 월드 기준이라는 계약이므로 좌표 변환이 항등이 됩니다.
         /// </summary>
-        private sealed class StubWorld : ISurfaceProvider, ISurfaceDiscovery
+        private sealed class StubWorld : ISurfaceProvider, ISurfaceDiscovery, ISurfaceTransformSource
         {
             private readonly Dictionary<SurfaceHandle, SurfaceTopology> _topologies = new();
             private readonly Dictionary<SurfaceHandle, ISurfaceAdapter> _adapters = new();
@@ -271,6 +314,12 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
 
             public bool TryGetAdapter(SurfaceHandle surface, out ISurfaceAdapter adapter) =>
                 _adapters.TryGetValue(surface, out adapter);
+
+            public bool TryGetSurfaceToWorld(SurfaceHandle surface, out Matrix4x4 surfaceToWorld)
+            {
+                surfaceToWorld = Matrix4x4.identity;
+                return _topologies.ContainsKey(surface);
+            }
 
             /// <summary>Physics 질의처럼 반경과 겹치는 Surface만 돌려줍니다. lazy 확장의 전제입니다.</summary>
             public int Discover(in Vector3 worldPosition, float radius, LayerMask layerMask, List<ISurfaceAdapter> results)

@@ -193,6 +193,31 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
                 // 회전한 격자에서도 Tile 중심이 자기 좌표로 되돌아와야 picking이 성립합니다.
                 Assert.That(grid.Layout.GetCoordinates(tile.IntrinsicCenter), Is.EqualTo(tile.Coordinates));
             }
+            Assert.That(grid.RegionBuildCount, Is.LessThan(grid.CandidateTileCount),
+                "The Patch hull should reject rotated-AABB padding before clipping.");
+        }
+
+        [Test]
+        public void Build_PerformanceBaseline_ReportsTimeAllocationAndClippingRatio()
+        {
+            SurfaceTopology topology = CreateLargePlane();
+            SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
+            SurfaceGridBuilder.Build(topology, seed, 0.5f, SurfacePatchBuildSettings.Unlimited, 0.7f);
+            long beforeBytes = System.GC.GetAllocatedBytesForCurrentThread();
+            System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            SurfaceGrid grid = SurfaceGridBuilder.Build(
+                topology, seed, 0.5f, SurfacePatchBuildSettings.Unlimited, 0.7f);
+
+            stopwatch.Stop();
+            long allocatedBytes = System.GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+            TestContext.WriteLine(
+                $"SurfaceGrid baseline: {stopwatch.Elapsed.TotalMilliseconds:F3} ms, " +
+                $"{allocatedBytes} B, clipping {grid.RegionBuildCount}/{grid.CandidateTileCount}");
+            Assert.That(stopwatch.ElapsedTicks, Is.GreaterThan(0));
+            // Mono/Incremental GC 구성에서는 이 API가 0을 반환할 수 있으므로 진단값으로만 기록합니다.
+            Assert.That(allocatedBytes, Is.GreaterThanOrEqualTo(0));
+            Assert.That(grid.RegionBuildCount, Is.LessThan(grid.CandidateTileCount));
         }
 
         [Test]
@@ -257,6 +282,103 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
         }
 
         [Test]
+        public void Build_AdjacentTiles_CanonicalizeSharedIntrinsicVertices()
+        {
+            SurfaceTopology topology = CreateLargePlane();
+            SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
+            SurfaceGrid grid = SurfaceGridBuilder.Build(
+                topology, seed, 0.5f, SurfacePatchBuildSettings.Unlimited, 0.37f);
+
+            var approximateGroups = grid.Tiles
+                .SelectMany(tile => tile.Region.Vertices)
+                .GroupBy(vertex => (
+                    Mathf.RoundToInt(vertex.IntrinsicPosition.x * 100000f),
+                    Mathf.RoundToInt(vertex.IntrinsicPosition.y * 100000f)))
+                .Where(group => group.Count() > 1);
+
+            Assert.That(approximateGroups.Any(), Is.True);
+            foreach (var group in approximateGroups)
+            {
+                Vector2 canonical = group.First().IntrinsicPosition;
+                Assert.That(group.All(vertex => vertex.IntrinsicPosition == canonical), Is.True,
+                    "Shared clipping vertices must reuse one bit-identical intrinsic coordinate.");
+            }
+        }
+
+        [Test]
+        public void Patch_ReportsGraphGeodesicAndMetricDistortionDiagnostics()
+        {
+            SurfaceTopology topology = CreateLargePlane();
+            SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
+
+            SurfacePatch patch = TriangleUnfoldingParameterizer.Build(
+                topology, seed, SurfacePatchBuildSettings.Unlimited);
+
+            Assert.That(patch.MaximumGraphGeodesicDistance, Is.GreaterThan(0f));
+            Assert.That(patch.Triangles.Single(face => face.TriangleIndex == 0).GraphGeodesicDistance,
+                Is.GreaterThan(0f));
+            Assert.That(patch.MaximumMetricDistortion, Is.LessThan(0.00001f));
+            Assert.That(patch.AverageMetricDistortion, Is.LessThan(0.00001f));
+        }
+
+        [Test]
+        public void TriangleParameterizer_ReturnsPatchSetWithSeedPrimaryPatch()
+        {
+            SurfaceTopology topology = CreateLargePlane();
+            SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
+            ISurfaceParameterizer parameterizer = new TriangleUnfoldingSurfaceParameterizer();
+
+            SurfacePatchSet result = parameterizer.Parameterize(
+                new SingleSurfaceProvider(topology), seed, SurfacePatchBuildSettings.Unlimited, null);
+
+            Assert.That(result.Seed, Is.EqualTo(seed));
+            Assert.That(result.Patches, Has.Count.EqualTo(1));
+            Assert.That(result.PrimaryPatch.Surface, Is.EqualTo(seed.Surface));
+            Assert.That(result.PrimaryPatch.SeedTriangleIndex, Is.EqualTo(seed.TriangleIndex));
+            Assert.That(result.MaximumMetricDistortion, Is.EqualTo(result.PrimaryPatch.MaximumMetricDistortion));
+        }
+
+        [Test]
+        public void TriangleParameterizer_AutomaticSplitting_AssignsEveryFaceExactlyOnce()
+        {
+            SurfaceTopology topology = CreateLargePlane();
+            SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
+            ISurfaceParameterizer parameterizer = new TriangleUnfoldingSurfaceParameterizer();
+            SurfacePatchBuildSettings settings = new(1, float.PositiveInfinity, float.PositiveInfinity, true);
+
+            SurfacePatchSet result = parameterizer.Parameterize(
+                new SingleSurfaceProvider(topology), seed, settings, null);
+
+            Assert.That(result.Patches, Has.Count.EqualTo(2));
+            Assert.That(result.PrimaryPatch.SeedTriangleIndex, Is.EqualTo(seed.TriangleIndex));
+            Assert.That(result.Patches.SelectMany(patch => patch.Triangles)
+                .Select(triangle => (triangle.Surface, triangle.TriangleIndex))
+                .Distinct().Count(), Is.EqualTo(2));
+            Assert.That(result.Patches.All(patch => patch.Triangles.Count == 1), Is.True);
+        }
+
+        [Test]
+        public void Build_AutomaticSplitting_ConsumesAllAlignedPatchesWithoutChangingLogicalGrid()
+        {
+            SurfaceTopology topology = CreateLargePlane();
+            SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
+            SurfaceGrid unsplit = SurfaceGridBuilder.Build(
+                topology, seed, 0.5f, SurfacePatchBuildSettings.Unlimited);
+            SurfaceGrid split = SurfaceGridBuilder.Build(
+                new SingleSurfaceProvider(topology),
+                seed,
+                0.5f,
+                new SurfacePatchBuildSettings(1, float.PositiveInfinity, float.PositiveInfinity, true),
+                Vector3.zero,
+                null,
+                new TriangleUnfoldingSurfaceParameterizer());
+
+            Assert.That(split.Patches, Has.Count.EqualTo(2));
+            Assert.That(split.Tiles.Select(tile => tile.Coordinates),
+                Is.EquivalentTo(unsplit.Tiles.Select(tile => tile.Coordinates)));
+        }
+
+        [Test]
         public void Build_SmallerTileRadius_ProducesFinerResolution()
         {
             SurfaceTopology topology = CreateLargePlane();
@@ -270,6 +392,27 @@ namespace Jeomseon.Unity.GridTileSystem.Tests
             // Hex 면적은 반지름의 제곱에 비례하므로 반지름을 절반으로 줄이면 Tile 수는 약 4배가 됩니다.
             // 외곽 여백 때문에 정확히 4배는 아니므로 넉넉한 하한만 검증합니다.
             Assert.That(fine.Tiles.Count, Is.GreaterThan(coarse.Tiles.Count * 3));
+        }
+
+        [Test]
+        public void SnapshotDelta_ReportsChangesAndMapsNegativeCoordinatesToChunks()
+        {
+            SurfaceTopology topology = CreateLargePlane();
+            SurfacePoint seed = new(topology.Handle, 0, new Vector3(0.2f, 0.4f, 0.4f));
+            SurfaceGrid firstGrid = SurfaceGridBuilder.Build(
+                topology, seed, 1f, SurfacePatchBuildSettings.Unlimited);
+            SurfaceGrid secondGrid = SurfaceGridBuilder.Build(
+                topology, seed, 0.5f, SurfacePatchBuildSettings.Unlimited);
+
+            SurfaceGridDelta delta = new SurfaceGridSnapshot(1, firstGrid)
+                .Diff(new SurfaceGridSnapshot(2, secondGrid));
+
+            Assert.That(delta.HasChanges, Is.True);
+            Assert.That(delta.FromVersion, Is.EqualTo(1));
+            Assert.That(delta.ToVersion, Is.EqualTo(2));
+            Assert.That(SurfaceGridChunk.FromTile(new HexCoordinates(-1, -9), 8),
+                Is.EqualTo(new SurfaceGridChunk(-1, -2)));
+            Assert.That(SurfaceGridChunk.CollectDirty(delta, 8), Is.Not.Empty);
         }
 
         [Test]

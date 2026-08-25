@@ -5,6 +5,8 @@ namespace Jeomseon.Unity.GridTileSystem.Services
 {
     public sealed class HexGridPointerInput : IHexGridPointerInput
     {
+        private bool _wasLeftButtonPressed;
+
         public bool TryGetPointer(out Vector2 screenPosition, out bool pressedThisFrame, out bool releasedThisFrame)
         {
             Mouse mouse = Mouse.current;
@@ -14,12 +16,15 @@ namespace Jeomseon.Unity.GridTileSystem.Services
                 screenPosition = default;
                 pressedThisFrame = false;
                 releasedThisFrame = false;
+                _wasLeftButtonPressed = false;
                 return false;
             }
 
             screenPosition = mouse.position.ReadValue();
-            pressedThisFrame = mouse.leftButton.wasPressedThisFrame;
-            releasedThisFrame = mouse.leftButton.wasReleasedThisFrame;
+            bool isLeftButtonPressed = mouse.leftButton.isPressed;
+            pressedThisFrame = isLeftButtonPressed && !_wasLeftButtonPressed;
+            releasedThisFrame = !isLeftButtonPressed && _wasLeftButtonPressed;
+            _wasLeftButtonPressed = isLeftButtonPressed;
             return true;
         }
     }
