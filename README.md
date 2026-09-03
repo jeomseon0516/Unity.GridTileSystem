@@ -9,12 +9,14 @@ Surface 외곽에서는 육각형 전체가 포함되는 Tile만 유지하므로
 
 ## 요구 사항
 
-- Unity 6000.5.7f1 이상
+- Unity 6000.6.0f1 이상
 - Runtime topology 생성에 Read/Write Enabled인 Static Mesh 또는 `TerrainData`
 - 원본 Mesh와 같은 Mesh를 사용하는 MeshCollider 또는 같은 TerrainData의 TerrainCollider
 - OpenUPM Scoped Registry의 `com.jeomseon.unity` 스코프
 
-Projector, URP, HDRP 또는 별도 Shader 패키지에 의존하지 않습니다.
+Projector나 별도 Shader 패키지에 의존하지 않습니다. Grid 지오메트리는 표준 `Mesh`라 렌더
+파이프라인에 종속되지 않지만, 번들 fallback 셰이더/머티리얼이 URP `17.6`을 대상으로 하므로
+`com.unity.render-pipelines.universal`에 의존합니다. HDRP는 지원 대상이 아닙니다.
 
 ## 설치
 
@@ -78,8 +80,9 @@ closure error, graph geodesic 상한, 최대/평균 metric distortion으로 분�
 
 기본 표현은 계속 `MeshSurfaceGridRenderBackend`입니다. 선택적
 `StructuredBufferSurfaceGridRenderBackend`는 vertex/index/visual을 GPU buffer에 올리고 indexed
-indirect draw를 제출합니다. Material은 `_SurfaceGridVertices`와 `_SurfaceGridVisuals` 계약을 구현해야
-하며, URP/HDRP 전용 통합은 이 Core 패키지에 포함하지 않습니다.
+indirect draw를 제출합니다. Material은 `_SurfaceGridVertices`와 `_SurfaceGridVisuals` 계약을 구현하고
+URP에서 렌더되려면 `UniversalForward`/`SRPDefaultUnlit` LightMode pass를 가져야 합니다. HDRP 전용
+통합은 이 Core 패키지에 포함하지 않습니다.
 
 `TangentExpMapSurfaceParameterizer`는 seed 접평면 1차 log-map 비교 기준선입니다. 완전한 heat-method
 geodesic solver가 아니며, `SurfaceParameterizationComparison`으로 Triangle Unfolding과 Patch 수·최대

@@ -2,9 +2,14 @@
 
 ## 현재 방향 — intrinsic Surface Grid
 
-`GridTileSystem`은 Projector나 특정 Render Pipeline을 사용하지 않습니다. Triangle topology를 local
-2D chart로 펼치고, 실제 길이로 정의한 Hex를 source Triangle과 교차한 뒤 barycentric binding으로
-표면에 정합합니다. Projector는 별도의 실험적 패키지이며 이 패키지와 Adapter도 공유하지 않습니다.
+`GridTileSystem`은 Projector를 사용하지 않습니다. Triangle topology를 local 2D chart로 펼치고,
+실제 길이로 정의한 Hex를 source Triangle과 교차한 뒤 barycentric binding으로 표면에 정합합니다.
+Projector는 별도의 실험적 패키지이며 이 패키지와 Adapter도 공유하지 않습니다.
+
+Grid 결과 지오메트리는 표준 `Mesh`라 렌더 파이프라인에 의존하지 않지만, 2026-09-02 워크스페이스
+기준이 Unity `6000.6` + URP `17.6`으로 바뀌면서 **번들 fallback 셰이더/머티리얼은 URP를
+대상으로 합니다**(`com.unity.render-pipelines.universal` 의존성 추가). `StructuredBuffer` 백엔드에
+사용자가 넘기는 Material도 URP LightMode pass가 있어야 렌더됩니다.
 
 설계와 수학의 기준 문서는 하네스의 다음 문서입니다.
 
@@ -307,7 +312,10 @@ Manager로 최신 작업 사본을 갱신했습니다. 중앙 seed Triangle 100�
 
 - [ ] 실제 프로젝트 수요가 확인된 경우 별도 URP/HDRP Backend 패키지
 - [ ] 별도 패키지로 pathfinding, Tile grouping 및 고수준 시각 효과
-- [ ] `SerializedDictionary` 패키지 안정화 후 좌표 lookup/Inspector 연동 비교
+- [ ] 좌표 lookup을 Inspector에서 직접 편집해야 하는 실제 요구가 확인되면 Unity 6000.6 네이티브
+      `[SerializeField] Dictionary<TKey,TValue>` 적용과 패키지 최소 버전 상향의 비용을 비교합니다.
+      런타임 조회 캐시만 필요하면 현재 직렬화 목록+Dictionary 캐시 구조를 유지하며, 별도
+      `SerializedDictionary` 패키지나 커스텀 직렬화 구현은 도입하지 않습니다.
 - [ ] 대규모 Terrain용 GPU heightmap visualization Backend (2026-08-25 보류 결정) — 기존
       `StructuredBufferSurfaceGridRenderBackend`가 Grid Geometry/Visual 업로드와 grid 전체 단일
       Draw Mode까지는 이미 지원하지만, heightmap 샘플링 기반 대규모 시각화 자체는 실제 수요가

@@ -4,6 +4,28 @@
 
 ## [Unreleased]
 
+- **(렌더 파이프라인)** 워크스페이스 Unity `6000.6` + URP `17.6` 전환. 번들 fallback 셰이더
+  `Hidden/Jeomseon/Surface Grid Depth Biased`를 URP 전용으로 이전했습니다: `UnityCG.cginc` →
+  URP `Core.hlsl`, `UnityObjectToClipPos` → `TransformObjectToHClip`, `fixed4` → `half4`,
+  `"RenderPipeline"="UniversalPipeline"` + `"LightMode"="UniversalForward"` 태그,
+  `_DepthBias*` 프로퍼티를 `UnityPerMaterial` CBUFFER로. `Fallback "Sprites/Default"`는 URP에도
+  존재해 유지. `SurfaceGridDepthBiased.mat`의 튜닝값(`_DepthBiasFactor: -84.41`)은 그대로입니다.
+- `com.unity.render-pipelines.universal` `17.6.0` 의존성을 추가했습니다. Grid 지오메트리 자체는
+  표준 `Mesh`라 파이프라인 비종속이지만, 번들 fallback 머티리얼과
+  `StructuredBufferSurfaceGridRenderBackend`에 사용자가 넘기는 Material은 URP에서 렌더되려면
+  `UniversalForward`/`SRPDefaultUnlit` LightMode pass를 가져야 합니다.
+- `MeshSurfaceGridRenderBackend`/`StructuredBufferSurfaceGridRenderBackend` C# 코드는
+  `MeshTopology` enum과 표준 `Graphics.DrawProceduralIndirect`만 사용해 변경 없음.
+- Basic Usage 샘플(`HexGridBasicUsage.unity`)의 Grid 출력 MeshRenderer가 Built-in
+  `Default-Diffuse`(Legacy, shader fileID 10302)를 참조해 URP에서 magenta로 렌더되던 문제를
+  고쳤습니다. 파이프라인 비종속 `Sprites-Default`(fileID 10754)로 바꿔 Grid vertex color를 그대로
+  표시합니다. Source Plane(`Grid Surface`)은 이미 10754였습니다.
+- Terrain Usage 샘플(`TerrainBasicUsage.unity`)의 `Terrain.m_MaterialTemplate`이 Built-in 기본
+  Terrain 머티리얼(fileID 10652)이라 URP에서 magenta로 렌더되던 문제를 고쳤습니다. URP
+  17.6의 기본 Terrain 머티리얼(`com.unity.render-pipelines.universal/Runtime/Materials/TerrainLit.mat`,
+  `Universal Render Pipeline/Terrain/Lit` 셰이더)을 직접 참조합니다. (Terrain 머티리얼을 `{fileID: 0}`
+  으로 비우면 씬 로드 시 URP 기본으로 자동 대체되지 않고 Built-in 셰이더로 남아 계속 magenta임.)
+
 ## [0.3.0] - 2026-08-25
 
 - **실제 Unity 사용자 검증에서 발견된 결함 수정** (`SurfaceRegionBuilder`/`HexGridSettings`):
