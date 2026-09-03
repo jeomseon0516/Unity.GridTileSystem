@@ -2,6 +2,10 @@
 
 이 문서는 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따릅니다.
 
+## [0.4.1] - 2026-09-03
+
+- `UnityEngine.Terrain`/`TerrainData`/`TerrainCollider`를 쓰는 Terrain Surface 어댑터가 있는데 `package.json`에 `com.unity.modules.terrain`/`com.unity.modules.terrainphysics` 의존성이 빠져 있어, Terrain 모듈이 없는 최소 프로젝트에서 `CS1069`로 컴파일되지 않던 문제를 고쳤습니다. (0.4.0을 최소 구성 소비자 프로젝트에서 검증하다 발견.)
+
 ## [0.4.0] - 2026-09-03
 
 - **(렌더 파이프라인)** 워크스페이스 Unity `6000.6` + URP `17.6` 전환. 번들 fallback 셰이더
