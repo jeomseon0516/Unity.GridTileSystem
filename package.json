@@ -1,6 +1,6 @@
 {
   "name": "com.jeomseon.unity.grid-tile-system",
-  "version": "0.3.0",
+  "version": ".0.4.0.",
   "displayName": "Jeomseon Unity Grid Tile System",
   "description": "Triangle topology와 intrinsic Surface Space 기반 육각 Grid, 상호작용 및 Mesh 시각화를 제공합니다. Grid 지오메트리는 표준 Mesh라 파이프라인 비종속이며, 번들 fallback 셰이더/머티리얼은 URP 17.6을 대상으로 합니다.",
   "unity": "6000.6",

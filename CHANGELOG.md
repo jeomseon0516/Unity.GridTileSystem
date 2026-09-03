@@ -2,7 +2,7 @@
 
 이 문서는 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따릅니다.
 
-## [Unreleased]
+## [0.4.0] - 2026-09-03
 
 - **(렌더 파이프라인)** 워크스페이스 Unity `6000.6` + URP `17.6` 전환. 번들 fallback 셰이더
   `Hidden/Jeomseon/Surface Grid Depth Biased`를 URP 전용으로 이전했습니다: `UnityCG.cginc` →
