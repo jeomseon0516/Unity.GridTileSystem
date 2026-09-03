@@ -10,12 +10,14 @@ Only hexes whose full intrinsic area fits inside the surface are retained, so bo
 
 ## Requirements
 
-- Unity 6000.5.7f1 or newer
+- Unity 6000.6.0f1 or newer
 - A Read/Write Enabled static Mesh or `TerrainData` for runtime topology construction
 - A MeshCollider using the same Mesh, or a TerrainCollider using the same TerrainData
 - The `com.jeomseon.unity` OpenUPM scope
 
-The package has no Projector, URP, HDRP, or external shader-package dependency.
+The package has no Projector or external shader-package dependency. The grid geometry is a plain `Mesh`
+and is render-pipeline agnostic, but the bundled fallback shader/material target URP `17.6`, so the
+package depends on `com.unity.render-pipelines.universal`. HDRP is not a supported target.
 
 ## Setup
 
@@ -75,8 +77,9 @@ arrays on Burst workers; the caller keeps Unity-object access and NativeArray li
 
 `MeshSurfaceGridRenderBackend` remains the default. The optional
 `StructuredBufferSurfaceGridRenderBackend` uploads vertex, index, and visual data and submits an indexed indirect
-draw. Its material must implement `_SurfaceGridVertices` and `_SurfaceGridVisuals`; this Core package does not
-include URP/HDRP-specific integration.
+draw. Its material must implement `_SurfaceGridVertices` and `_SurfaceGridVisuals`, and needs a
+`UniversalForward`/`SRPDefaultUnlit` LightMode pass to render under URP; this Core package does not
+include HDRP-specific integration.
 
 `TangentExpMapSurfaceParameterizer` is a first-order seed-tangent log-map comparison baseline, not a complete
 heat-method geodesic solver. Use `SurfaceParameterizationComparison` to compare its patch count and maximum metric

@@ -10,6 +10,7 @@ Shader "Hidden/Jeomseon/Surface Grid Depth Biased"
     {
         Tags
         {
+            "RenderPipeline" = "UniversalPipeline"
             "Queue" = "Transparent"
             "RenderType" = "Transparent"
             "IgnoreProjector" = "True"
@@ -17,43 +18,52 @@ Shader "Hidden/Jeomseon/Surface Grid Depth Biased"
 
         Pass
         {
+            Name "Forward"
+            Tags { "LightMode" = "UniversalForward" }
+
             Cull Off
             ZWrite Off
             ZTest LEqual
             Blend SrcAlpha OneMinusSrcAlpha
             Offset [_DepthBiasFactor], [_DepthBiasUnits]
 
-            CGPROGRAM
+            HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag
-            #pragma target 2.0
-            #include "UnityCG.cginc"
+            #pragma target 3.5
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            CBUFFER_START(UnityPerMaterial)
+                float _DepthBiasFactor;
+                float _DepthBiasUnits;
+            CBUFFER_END
 
             struct Attributes
             {
                 float4 positionOS : POSITION;
-                fixed4 color : COLOR;
+                half4 color : COLOR;
             };
 
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
-                fixed4 color : COLOR;
+                half4 color : COLOR;
             };
 
             Varyings Vert(Attributes input)
             {
                 Varyings output;
-                output.positionCS = UnityObjectToClipPos(input.positionOS);
+                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
                 output.color = input.color;
                 return output;
             }
 
-            fixed4 Frag(Varyings input) : SV_Target
+            half4 Frag(Varyings input) : SV_Target
             {
                 return input.color;
             }
-            ENDCG
+            ENDHLSL
         }
     }
     Fallback "Sprites/Default"
