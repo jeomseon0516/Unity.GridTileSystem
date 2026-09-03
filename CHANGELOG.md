@@ -2,6 +2,10 @@
 
 이 문서는 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따릅니다.
 
+## [0.4.2] - 2026-09-03
+
+- com.jeomseon 패키지 간 의존성 핀이 옛 버전을 가리켜, 최소 구성 소비 프로젝트에서 UPM minimum-version-selection이 서로 안 맞는 낡은 세트를 조립하던 버그를 고쳤습니다. sibling 의존성 핀을 현재 최신으로 갱신합니다. (com.jeomseon.unity.attributes 0.2.1 -> 0.4.2; com.jeomseon.unity.core 0.1.2 -> 0.3.2; com.jeomseon.unity.editor-toolkit 0.5.0 -> 0.7.2)
+
 ## [0.4.1] - 2026-09-03
 
 - `UnityEngine.Terrain`/`TerrainData`/`TerrainCollider`를 쓰는 Terrain Surface 어댑터가 있는데 `package.json`에 `com.unity.modules.terrain`/`com.unity.modules.terrainphysics` 의존성이 빠져 있어, Terrain 모듈이 없는 최소 프로젝트에서 `CS1069`로 컴파일되지 않던 문제를 고쳤습니다. (0.4.0을 최소 구성 소비자 프로젝트에서 검증하다 발견.)
