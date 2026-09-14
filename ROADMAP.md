@@ -11,13 +11,6 @@ Grid 결과 지오메트리는 표준 `Mesh`라 렌더 파이프라인에 의존
 대상으로 합니다**(`com.unity.render-pipelines.universal` 의존성 추가). `StructuredBuffer` 백엔드에
 사용자가 넘기는 Material도 URP LightMode pass가 있어야 렌더됩니다.
 
-설계와 수학의 기준 문서는 하네스의 다음 문서입니다.
-
-- `architecture/intrinsic-surface-grid.md`
-- `architecture/intrinsic-surface-grid-flow.md`
-- `architecture/intrinsic-surface-grid-study-guide.md`
-- `architecture/grid-tile-system-rendering-backends.md`
-
 ## Terrain 정합 렌더링 — Depth Bias 방식 폐기 결정 (2026-08-25)
 
 굴곡진 Terrain 위에 Tile Mesh를 z-fighting 없이 밀착시키는 문제에서 두 접근을 시도했고 **둘 다
@@ -140,7 +133,7 @@ View-dependent Bias   - Camera Offset
 
 `TileDepthConflictMode`(`None`/`DepthBias`/`DepthBiasWithNormalFallback` 등) 같은 단순 enum이나,
 확장 가능성이 실제로 있을 때만 `ITileDepthConflictResolver` 같은 Strategy 인터페이스를 검토합니다.
-불필요하게 추상화 계층을 늘리지 않는다는 AGENTS.md 원칙을 그대로 적용합니다.
+실제 확장 요구가 확인되기 전에는 불필요한 추상화 계층을 추가하지 않습니다.
 
 **착수 전 필수 선행 작업**: 위 barycentric Y 오차 수정과, 대각선 수정 반영 후 Terrain/Basic 두
 Sample의 실제 Unity 육안 재확인이 이 재설계보다 먼저입니다 — 근본 기하 결함이 남아 있는 상태에서

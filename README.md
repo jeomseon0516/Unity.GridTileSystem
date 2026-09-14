@@ -102,6 +102,4 @@ metric distortion을 같은 입력에서 비교해 정책을 선택합니다.
   큰 동적 Surface에서는 Burst 평가와 Chunk 분리를 함께 사용해야 합니다.
 - 입력은 Unity Input System과 MeshCollider/TerrainCollider raycast를 사용합니다.
 
-수학 학습 순서는 Harness의 `architecture/intrinsic-surface-grid-study-guide.md`에 정리돼 있습니다.
-
 영문 문서는 [README.en.md](README.en.md)를 참고하세요.
