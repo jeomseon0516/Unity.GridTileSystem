@@ -1,25 +1,61 @@
 # Jeomseon Unity Grid Tile System
 
-> The upcoming intrinsic Surface Grid architecture is incompatible with scenes authored with the
-> projector workflow. Configure and bake them again with the new `HexGridController`.
+[한국어](README.md) | English
 
-A Unity package that builds hex grids in intrinsic Surface Space derived from triangle topology. It
-does not project a world-XZ or projector plane onto geometry, so folded meshes, walls, and curved
-surfaces can be traversed through topology.
-Only hexes whose full intrinsic area fits inside the surface are retained, so boundary tiles are never clipped.
+Builds intrinsic Hex Grids on triangle topology, separating logical state, surface bindings, and rendering.
+
+## Quick start
+
+Configure settings/seed, discover readable Mesh/Terrain, unfold patches, clip Hexes with barycentric binding, create geometry snapshots, and render with Mesh/structured-buffer backends. RefreshRendering after direct data edits.
+
+## Contracts and limitations
+
+It does not remove global regular-Hex defects on closed surfaces. Graph geodesic is a face-center path upper bound, not heat-method distance. See README for multi-surface skinning and GPU backend limits.
 
 ## Requirements
 
-- Unity 6000.6.0f1 or newer
-- A Read/Write Enabled static Mesh or `TerrainData` for runtime topology construction
-- A MeshCollider using the same Mesh, or a TerrainCollider using the same TerrainData
-- The `com.jeomseon.unity` OpenUPM scope
+- Unity `6000.6.0f1`
+- Package: `com.jeomseon.unity.grid-tile-system` `0.4.2`
+- `com.jeomseon.unity.attributes`: `0.4.2`
+- `com.jeomseon.unity.core`: `0.3.2`
+- `com.jeomseon.unity.editor-toolkit`: `0.7.2`
+- `com.unity.burst`: `1.8.30`
+- `com.unity.collections`: `2.6.8`
+- `com.unity.inputsystem`: `1.7.0`
+- `com.unity.render-pipelines.universal`: `17.6.0`
+- `com.unity.modules.terrain`: `1.0.0`
+- `com.unity.modules.terrainphysics`: `1.0.0`
 
-The package has no Projector or external shader-package dependency. The grid geometry is a plain `Mesh`
-and is render-pipeline agnostic, but the bundled fallback shader/material target URP `17.6`, so the
-package depends on `com.unity.render-pipelines.universal`. HDRP is not a supported target.
+## Installation
 
-## Setup
+Merge this into your project's `Packages/manifest.json`; preserve existing dependencies and registries.
+
+```json
+{
+  "scopedRegistries": [
+    {
+      "name": "OpenUPM",
+      "url": "https://package.openupm.com",
+      "scopes": [
+        "com.jeomseon"
+      ]
+    }
+  ],
+  "dependencies": {
+    "com.jeomseon.unity.grid-tile-system": "0.4.2"
+  }
+}
+```
+
+Or use **Install package from git URL** in Package Manager:
+
+```text
+https://github.com/jeomseon0516/Unity.GridTileSystem.git#v0.4.2
+```
+
+## API usage and details
+
+### Setup
 
 1. Create a `HexGridSettings` asset.
 2. Add colliders for readable static meshes or terrains in the scene. No surface registration is required.
@@ -61,7 +97,7 @@ Terrain LOD depth conflicts without lifting the mesh from the heightfield.
 The Inspector keeps the `Surface Grid` output mesh, renderer, controller bake result, and events on one object.
 There is no receiver field or separate surface-registration workflow.
 
-## Accuracy and large-grid APIs
+### Accuracy and large-grid APIs
 
 Enable `SurfacePatchBuildSettings.SplitWhenLimitReached` to continue from frontier faces when a triangle-count
 or graph-intrinsic-radius limit is reached. Frontier placements keep every patch in one intrinsic coordinate
@@ -85,7 +121,7 @@ include HDRP-specific integration.
 heat-method geodesic solver. Use `SurfaceParameterizationComparison` to compare its patch count and maximum metric
 distortion against Triangle Unfolding on the same input.
 
-## Current limitations
+### Current limitations
 
 - Automatic multi-patch coverage cannot remove the topological defects required to cover an entire sphere with
   regular hexes. The current graph geodesic is a face-centroid adjacency upper bound, not the heat method.
@@ -93,3 +129,23 @@ distortion against Triangle Unfolding on the same input.
   render-pipeline-specific shaders/passes remain separate optional integrations driven by real project demand.
 - Structured-buffer skinned deformation re-uploads the complete interleaved buffer. Combine Burst evaluation with
   chunking for large dynamic surfaces.
+
+## Samples
+
+Import the desired entry from **Package Manager > Samples**. Use the included Scene/Editor tool and complete its Setup step first, if required.
+
+- [Basic Usage](Samples~/BasicUsage/README.md)
+  - [HexGridBasicUsage](Samples~/BasicUsage/HexGridBasicUsage.unity)
+- [Terrain Usage](Samples~/TerrainUsage/README.md)
+  - [TerrainBasicUsage](Samples~/TerrainUsage/TerrainBasicUsage.unity)
+
+## Tests
+
+[Test sources](Tests)
+
+Add the package ID to manifest `testables`, then execute its relevant EditMode/PlayMode assemblies in Unity Test Runner.
+
+## Further reading
+
+[Complete source map and package metadata](Documentation~/Overview.en.md)
+- [Changelog](CHANGELOG.md)

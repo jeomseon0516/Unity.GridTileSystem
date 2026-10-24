@@ -1,28 +1,65 @@
 # Jeomseon Unity Grid Tile System
 
-> 다음 릴리스의 intrinsic Surface Grid 구조는 기존 Projector 기반 Scene과 호환되지 않습니다. 새
-> `HexGridController` 구성으로 다시 Bake해야 합니다.
+한국어 | [English](README.en.md)
 
-Triangle topology와 intrinsic Surface Space 위에 육각 Grid를 생성하는 Unity 패키지입니다. Grid를
-월드 XZ 또는 Projector 평면에서 투영하지 않으므로 벽, 접힌 Mesh와 곡면을 topology를 따라 다룹니다.
-Surface 외곽에서는 육각형 전체가 포함되는 Tile만 유지하므로 잘린 경계 Tile을 만들지 않습니다.
+Triangle topology 위에 intrinsic Hex Grid를 생성하고 논리 상태·표면 binding·렌더링을 분리합니다.
+
+## 빠르게 시작하기
+
+설정과 seed 구성 → readable Mesh/Terrain 탐색 → unfolding Patch → Hex clipping과 barycentric binding → geometry snapshot → Mesh 또는 structured-buffer Backend. 데이터 직접 변경 후 RefreshRendering이 필요합니다.
+
+## 계약과 주의사항
+
+구면 전체의 regular hex 결함을 제거하지 않습니다. graph geodesic은 Face 중심 경로 상한이며 heat-method가 아닙니다. multi-surface skinned 변형과 GPU backend 제약은 README의 제한 사항을 확인하세요.
 
 ## 요구 사항
 
-- Unity 6000.6.0f1 이상
-- Runtime topology 생성에 Read/Write Enabled인 Static Mesh 또는 `TerrainData`
-- 원본 Mesh와 같은 Mesh를 사용하는 MeshCollider 또는 같은 TerrainData의 TerrainCollider
-- OpenUPM Scoped Registry의 `com.jeomseon.unity` 스코프
-
-Projector나 별도 Shader 패키지에 의존하지 않습니다. Grid 지오메트리는 표준 `Mesh`라 렌더
-파이프라인에 종속되지 않지만, 번들 fallback 셰이더/머티리얼이 URP `17.6`을 대상으로 하므로
-`com.unity.render-pipelines.universal`에 의존합니다. HDRP는 지원 대상이 아닙니다.
+- Unity `6000.6.0f1`
+- 패키지: `com.jeomseon.unity.grid-tile-system` `0.4.2`
+- `com.jeomseon.unity.attributes`: `0.4.2`
+- `com.jeomseon.unity.core`: `0.3.2`
+- `com.jeomseon.unity.editor-toolkit`: `0.7.2`
+- `com.unity.burst`: `1.8.30`
+- `com.unity.collections`: `2.6.8`
+- `com.unity.inputsystem`: `1.7.0`
+- `com.unity.render-pipelines.universal`: `17.6.0`
+- `com.unity.modules.terrain`: `1.0.0`
+- `com.unity.modules.terrainphysics`: `1.0.0`
 
 ## 설치
 
+프로젝트 `Packages/manifest.json`의 기존 dependencies와 registry를 유지하면서 다음 항목을 병합합니다.
+
+```json
+{
+  "scopedRegistries": [
+    {
+      "name": "OpenUPM",
+      "url": "https://package.openupm.com",
+      "scopes": [
+        "com.jeomseon"
+      ]
+    }
+  ],
+  "dependencies": {
+    "com.jeomseon.unity.grid-tile-system": "0.4.2"
+  }
+}
+```
+
+또는 Package Manager의 **Install package from git URL**을 사용합니다:
+
+```text
+https://github.com/jeomseon0516/Unity.GridTileSystem.git#v0.4.2
+```
+
+## API 사용과 상세 설명
+
+### 설치
+
 Unity Package Manager에서 `com.jeomseon.unity.grid-tile-system`을 추가합니다.
 
-## 기본 구성
+### 기본 구성
 
 1. `HexGridSettings` asset을 생성합니다.
 2. Scene의 readable Static Mesh 또는 Terrain에 대응하는 Collider를 둡니다. 별도 Surface 등록은 없습니다.
@@ -63,7 +100,7 @@ offset 0과 패키지 내장 depth-bias Material로 실제 Geometry를 띄우지
 Inspector에서는 `Surface Grid` 출력 Mesh, Renderer, `Hex Grid Controller`의 Bake 결과와 이벤트를 한
 오브젝트에서 확인할 수 있습니다. Surface를 별도로 등록하는 Receiver 필드는 존재하지 않습니다.
 
-## 정확도와 대규모 Grid API
+### 정확도와 대규모 Grid API
 
 `SurfacePatchBuildSettings`의 `SplitWhenLimitReached`를 켜면 Triangle 수 또는 graph intrinsic 반경
 한계에서 만난 Face를 다음 Patch seed로 이어갑니다. Patch는 frontier의 실제 펼침 배치를 공유하므로
@@ -88,7 +125,7 @@ URP에서 렌더되려면 `UniversalForward`/`SRPDefaultUnlit` LightMode pass를
 geodesic solver가 아니며, `SurfaceParameterizationComparison`으로 Triangle Unfolding과 Patch 수·최대
 metric distortion을 같은 입력에서 비교해 정책을 선택합니다.
 
-## 현재 제한 사항
+### 현재 제한 사항
 
 - Runtime Adapter는 readable Static Mesh와 Terrain heightfield를 지원합니다. Terrain은 전체 Mesh를
   복제하지 않고 vertex/triangle/adjacency를 계산하며 hole Face는 traversal에서 제외합니다.
@@ -103,3 +140,23 @@ metric distortion을 같은 입력에서 비교해 정책을 선택합니다.
 - 입력은 Unity Input System과 MeshCollider/TerrainCollider raycast를 사용합니다.
 
 영문 문서는 [README.en.md](README.en.md)를 참고하세요.
+
+## 샘플 실행
+
+**Package Manager > Samples**에서 예제를 Import합니다. 포함된 Scene 또는 Editor 도구를 열고 필요한 Setup 메뉴를 먼저 실행합니다.
+
+- [Basic Usage](Samples~/BasicUsage/README.md)
+  - [HexGridBasicUsage](Samples~/BasicUsage/HexGridBasicUsage.unity)
+- [Terrain Usage](Samples~/TerrainUsage/README.md)
+  - [TerrainBasicUsage](Samples~/TerrainUsage/TerrainBasicUsage.unity)
+
+## 테스트
+
+[테스트 코드](Tests)
+
+manifest의 `testables`에 패키지 ID를 추가하고 Unity Test Runner의 관련 EditMode/PlayMode 어셈블리를 실행합니다.
+
+## 추가 문서
+
+[전체 코드 지도와 패키지 구성](Documentation~/Overview.md)
+- [Changelog](CHANGELOG.md)
