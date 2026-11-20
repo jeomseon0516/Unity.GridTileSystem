@@ -23,6 +23,12 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
         private HexTile _selectedTile;
         private bool _showSettings = true;
         private ListView _tilesListView;
+        private InfoField _tileCountField;
+        private VisualElement _inlineSettingsHost;
+        private HelpBox _missingSettingsHelpBox;
+        private HelpBox _configuredHelpBox;
+        private Button _rebuildButton;
+        private Button _clearButton;
 
         private void OnEnable()
         {
@@ -51,17 +57,116 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
         /// <summary>
         /// UI Toolkit 기반 Inspector 루트를 구성합니다. Bake된 Tile은 수백 개까지 늘어날 수 있고 각
         /// 원소마다 UnityEvent가 6개씩 있어, 기존 IMGUI 배열 그리기(DrawDefaultInspector)로는 화면에
-        /// 보이지 않는 Tile까지 전부 컨트롤을 만들어 Inspector가 느려집니다. 나머지 Inspector는 그대로
-        /// IMGUI를 쓰되(IMGUIContainer), Tile 목록만 virtualization을 지원하는 ListView로 그려 실제
-        /// 보이는 행만 컨트롤을 만들도록 합니다.
+        /// 보이지 않는 Tile까지 전부 컨트롤을 만들어 Inspector가 느려집니다. Tile 목록은
+        /// virtualization을 지원하는 ListView로 그려 실제 보이는 행만 컨트롤을 만들도록 합니다.
         /// </summary>
         public override VisualElement CreateInspectorGUI()
         {
             VisualElement root = new();
             root.RegisterCallback<SerializedPropertyChangeEvent>(HandleInspectorPropertyChanged);
-            root.Add(new IMGUIContainer(DrawImguiInspector));
+            root.Add(CreateInspectorContent());
             root.Add(CreateTilesListView());
             return root;
+        }
+
+        /// <summary>
+        /// IMGUI 호스트(UI Toolkit을 쓰지 않는 Inspector 경로)용 대체 경로입니다. UI Toolkit 경로와 같은
+        /// 순서로 그리며, Tile 목록은 virtualization 없이 기본 배열 UI로 표시합니다.
+        /// </summary>
+        public override void OnInspectorGUI()
+        {
+            DrawImguiInspector();
+            serializedObject.Update();
+            EditorGUILayout.PropertyField(_tilesProperty, true);
+            serializedObject.ApplyModifiedProperties();
+        }
+
+        /// <summary>Tile 목록을 제외한 Inspector 본문을 UI Toolkit으로 구성합니다.</summary>
+        private VisualElement CreateInspectorContent()
+        {
+            VisualElement content = new();
+            _tileCountField = new InfoField("Baked Tile Count");
+            content.Add(_tileCountField);
+
+            // tiles는 아래 ListView가 따로 그리므로 여기서는 제외합니다.
+            SerializedProperty iterator = serializedObject.GetIterator();
+            for (bool enterChildren = true; iterator.NextVisible(enterChildren); enterChildren = false)
+            {
+                if (iterator.propertyPath == "tiles") continue;
+                content.Add(new PropertyField(iterator.Copy()));
+            }
+
+            _inlineSettingsHost = new VisualElement();
+            content.Add(_inlineSettingsHost);
+            RebuildInlineSettings();
+            content.TrackPropertyValue(_settingsProperty, _ => RebuildInlineSettings());
+
+            _missingSettingsHelpBox = new HelpBox(
+                "Assign Settings. The grid is discovered automatically from the seed position — no surface needs to be registered.",
+                HelpBoxMessageType.Error);
+            _configuredHelpBox = new HelpBox(
+                "Tiles are created automatically from the seed position. Click a tile in the Scene view or in the list below to edit it.",
+                HelpBoxMessageType.Info);
+            content.Add(_missingSettingsHelpBox);
+            content.Add(_configuredHelpBox);
+
+            _rebuildButton = new Button(RebuildTiles) { text = "Rebuild Tiles" };
+            _clearButton = new Button(() =>
+            {
+                if (EditorUtility.DisplayDialog(
+                        "Clear Baked Tiles?",
+                        "This removes serialized tile data. Tiles will be recreated automatically at runtime or when Rebuild Tiles is used.",
+                        "Clear",
+                        "Cancel"))
+                {
+                    ClearTiles();
+                }
+            }) { text = "Clear Baked Tiles" };
+            content.Add(_rebuildButton);
+            content.Add(_clearButton);
+
+            RefreshInspectorState();
+            content.TrackSerializedObjectValue(serializedObject, _ => RefreshInspectorState());
+            return content;
+        }
+
+        /// <summary>Tile 수, 구성 안내와 버튼 활성 상태를 현재 Controller 상태에 맞춥니다.</summary>
+        private void RefreshInspectorState()
+        {
+            if (_tileCountField == null || _controller == null) return;
+
+            serializedObject.UpdateIfRequiredOrScript();
+            _tileCountField.SetValueWithoutNotify(_controller.TileCount.ToString());
+            bool isConfigured = _settingsProperty.objectReferenceValue != null;
+            _missingSettingsHelpBox.style.display = isConfigured ? DisplayStyle.None : DisplayStyle.Flex;
+            _configuredHelpBox.style.display = isConfigured ? DisplayStyle.Flex : DisplayStyle.None;
+            _rebuildButton.SetEnabled(isConfigured);
+            _clearButton.SetEnabled(_controller.TileCount != 0);
+        }
+
+        /// <summary>할당된 HexGridSettings의 Inspector를 접이식으로 함께 표시합니다.</summary>
+        private void RebuildInlineSettings()
+        {
+            if (_inlineSettingsHost == null) return;
+
+            _inlineSettingsHost.Clear();
+            HexGridSettings gridSettings = _settingsProperty.objectReferenceValue as HexGridSettings;
+            if (gridSettings == null) return;
+
+            Foldout foldout = new() { text = "Hex Grid Settings", value = _showSettings };
+            foldout.RegisterValueChangedCallback(change =>
+            {
+                if (change.target == foldout) _showSettings = change.newValue;
+            });
+            foldout.Add(new InspectorElement(gridSettings));
+            // IMGUI 경로의 EndChangeCheck와 같이 Settings 편집 시 Controller와 Scene 뷰를 갱신합니다.
+            foldout.TrackSerializedObjectValue(new SerializedObject(gridSettings), _ =>
+            {
+                if (_controller == null) return;
+                EditorUtility.SetDirty(_controller);
+                SceneView.RepaintAll();
+            });
+            _inlineSettingsHost.Add(foldout);
         }
 
         private void DrawImguiInspector()
@@ -207,6 +312,7 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
                 _tilesListView.Unbind();
                 _tilesListView.BindProperty(_tilesProperty);
             }
+            RefreshInspectorState();
             Repaint();
         }
 
@@ -309,6 +415,26 @@ namespace Jeomseon.Unity.GridTileSystem.Editor
             _selectedTile = tile;
             _tileOptionOverlay.ShowProperty(dataProperty);
             SceneView.RepaintAll();
+        }
+
+        /// <summary>IMGUI의 LabelField(label, value)와 같이 Inspector 라벨 폭에 맞춘 읽기 전용 값을 표시합니다.</summary>
+        private sealed class InfoField : BaseField<string>
+        {
+            private readonly Label _valueLabel;
+
+            public InfoField(string label) : this(label, new Label()) { }
+
+            private InfoField(string label, Label valueLabel) : base(label, valueLabel)
+            {
+                _valueLabel = valueLabel;
+                AddToClassList(alignedFieldUssClassName);
+            }
+
+            public override void SetValueWithoutNotify(string newValue)
+            {
+                base.SetValueWithoutNotify(newValue);
+                _valueLabel.text = newValue;
+            }
         }
 
         private bool TryFindTileProperty(IHexTile tile, out SerializedProperty tileProperty)
